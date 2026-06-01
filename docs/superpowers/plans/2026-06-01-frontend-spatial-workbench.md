@@ -63,11 +63,14 @@ Write `frontend/package.json`:
   },
   "dependencies": {
     "axios": "^1.7.9",
+    "camera-controls": "^3.1.2",
     "lucide-react": "^0.468.0",
+    "postprocessing": "^6.39.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "soonspacejs": "^2.15.7",
-    "three": "^0.171.0"
+    "soonspacejs": "^2.15.8",
+    "three": "^0.184.0",
+    "three-mesh-bvh": "^0.9.9"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
@@ -75,11 +78,12 @@ Write `frontend/package.json`:
     "@testing-library/user-event": "^14.5.2",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",
-    "@types/three": "^0.171.0",
+    "@types/three": "^0.184.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.8"
   }
 }
 ```
@@ -147,7 +151,7 @@ Write `frontend/tsconfig.node.json`:
 Write `frontend/vite.config.ts`:
 
 ```ts
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
