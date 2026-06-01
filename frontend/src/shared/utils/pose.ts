@@ -13,10 +13,11 @@ export function quaternionToYaw(q: QuaternionValue): number {
 
 export function runtimePoseToSceneTransform(pose: RuntimePose): SceneTransform {
   return {
+    // Runtime pose is Z-up. Three/SoonSpace scenes are Y-up.
     position: {
       x: pose.position.x,
-      y: pose.position.y,
-      z: pose.position.z,
+      y: pose.position.z,
+      z: pose.position.y,
     },
     rotation: {
       x: 0,
