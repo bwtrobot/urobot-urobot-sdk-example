@@ -362,12 +362,22 @@ describe('mapApi', () => {
       },
       source: 'real',
     });
+    expect(http.defaults.adapter).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        params: { editionId: 'edition-real', page_no: 1, page_size: 20 },
+      }),
+    );
     await expect(listTopologyPaths('edition-real')).resolves.toMatchObject({
       data: {
         rows: [{ id: 'topology-real' }],
       },
       source: 'real',
     });
+    expect(http.defaults.adapter).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        params: { editionId: 'edition-real', page_no: 1, page_size: 20 },
+      }),
+    );
     expect(seenUrls).toEqual([
       '/map/edition/edition-real',
       '/map/edition/edition-real/charging-stations',
