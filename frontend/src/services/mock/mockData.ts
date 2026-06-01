@@ -43,6 +43,14 @@ const baseNodes: PathNode[] = [
   },
 ];
 
+function clonePathNodes(): PathNode[] {
+  return baseNodes.map((node) => ({
+    ...node,
+    position: { ...node.position },
+    orientation: node.orientation ? { ...node.orientation } : undefined,
+  }));
+}
+
 export const mockRobots: RobotSummary[] = [
   {
     id: 'robot-alpha',
@@ -172,7 +180,7 @@ export const mockNavigationPath: NavigationPath = {
   mapName: 'Main Facility',
   editionId: 'edition-main-v1',
   editionName: 'Main Facility v1',
-  nodes: baseNodes,
+  nodes: clonePathNodes(),
 };
 
 export const mockTopologyPath: TopologyPath = {
@@ -183,7 +191,7 @@ export const mockTopologyPath: TopologyPath = {
   mapName: 'Main Facility',
   editionId: 'edition-main-v1',
   editionName: 'Main Facility v1',
-  nodes: baseNodes,
+  nodes: clonePathNodes(),
   edges: [
     {
       id: 'edge-start-inspection',

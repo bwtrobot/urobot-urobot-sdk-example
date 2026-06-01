@@ -96,4 +96,55 @@ describe('apiRequest', () => {
       ]),
     );
   });
+
+  it('keeps successful request semantics when a log subscriber throws', async () => {
+    http.defaults.adapter = vi.fn(async (config) => ({
+      data: { result: { id: 'robot-1' } },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })) as AxiosAdapter;
+    const unsubscribe = getApiLogs.subscribe(() => {
+      throw new Error('subscriber failed');
+    });
+
+    const result = await apiRequest<{ id: string }>({
+      method: 'GET',
+      url: '/robots/robot-1',
+      fallbackData: { id: 'fallback' },
+    });
+    unsubscribe();
+
+    expect(result).toEqual({
+      data: { id: 'robot-1' },
+      source: 'real',
+    });
+    expect(getApiLogs()[0]).toMatchObject({
+      status: 'success',
+      source: 'real',
+    });
+  });
+
+  it('returns a cloned fallback value so consumers cannot mutate shared mock state', async () => {
+    http.defaults.adapter = vi.fn(async () => {
+      throw new Error('network unavailable');
+    }) as AxiosAdapter;
+    const fallbackData = { rows: [{ id: 'mock-robot' }] };
+
+    const first = await apiRequest<typeof fallbackData>({
+      method: 'GET',
+      url: '/robots',
+      fallbackData,
+    });
+    first.data.rows[0].id = 'changed';
+    const second = await apiRequest<typeof fallbackData>({
+      method: 'GET',
+      url: '/robots',
+      fallbackData,
+    });
+
+    expect(second.data.rows[0].id).toBe('mock-robot');
+    expect(second.data).not.toBe(fallbackData);
+  });
 });

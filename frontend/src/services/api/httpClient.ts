@@ -1,14 +1,6 @@
 import axios, { type AxiosRequestConfig, type Method } from 'axios';
 import type { ApiResult } from '../../shared/types/api';
 
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_BASE_URL?: string;
-    };
-  }
-}
-
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
   timeout: 10000,
@@ -66,7 +58,7 @@ function appendLog(entry: Omit<ApiLogEntry, 'id' | 'timestamp'>) {
   ].slice(0, maxLogEntries);
 
   const snapshot = getApiLogs();
-  subscribers.forEach((subscriber) => subscriber(snapshot));
+  notifySubscribers(snapshot);
 }
 
 export function getApiLogs(): ApiLogEntry[] {
@@ -83,7 +75,21 @@ getApiLogs.subscribe = (subscriber: ApiLogSubscriber) => {
 
 export function clearApiLogs() {
   logs = [];
-  subscribers.forEach((subscriber) => subscriber(getApiLogs()));
+  notifySubscribers(getApiLogs());
+}
+
+function notifySubscribers(snapshot: ApiLogEntry[]) {
+  subscribers.forEach((subscriber) => {
+    try {
+      subscriber(snapshot);
+    } catch {
+      // Observers must not affect API request semantics.
+    }
+  });
+}
+
+function cloneFallbackData<T>(data: T): T {
+  return structuredClone(data);
 }
 
 export async function apiRequest<T>(options: ApiRequestOptions<T>): Promise<ApiRequestResult<T>> {
@@ -119,7 +125,7 @@ export async function apiRequest<T>(options: ApiRequestOptions<T>): Promise<ApiR
     });
 
     return {
-      data: fallbackData,
+      data: cloneFallbackData(fallbackData),
       source: 'mock',
       reason,
     };
