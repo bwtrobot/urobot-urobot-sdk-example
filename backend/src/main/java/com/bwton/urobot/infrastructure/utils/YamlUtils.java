@@ -1,18 +1,14 @@
 package com.bwton.urobot.infrastructure.utils;
 
-import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
 public class YamlUtils {
-
-
 
     public static Object getValue(Path path, String key) throws IOException {
         Yaml yaml = new Yaml();
