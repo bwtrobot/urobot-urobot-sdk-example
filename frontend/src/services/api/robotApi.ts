@@ -80,8 +80,16 @@ export async function getRobotRuntime(robotId: string) {
 
   const data = runtime.data;
   const normalized = data && typeof data === 'object' && 'rows' in data
-    ? (data.rows?.[0] ?? mockRuntime)
-    : (data ?? mockRuntime);
+    ? data.rows?.[0]
+    : data;
+
+  if (!normalized) {
+    return {
+      data: structuredClone(mockRuntime),
+      source: 'mock' as const,
+      reason: 'Empty runtime response',
+    };
+  }
 
   return {
     ...runtime,

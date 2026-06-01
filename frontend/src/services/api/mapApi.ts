@@ -24,26 +24,25 @@ function buildPageResult<T>(rows: T[]): PageResult<T> {
 }
 
 export async function getMapEditions(mapId: string) {
-  return apiRequest<PageResult<MapEdition>>({
+  return apiRequest<MapEdition[]>({
     method: 'GET',
-    url: '/map/edition/page',
-    params: { mapId },
-    fallbackData: buildPageResult([mockEdition]),
+    url: `/map/${mapId}/editions`,
+    fallbackData: [mockEdition],
   });
 }
 
 export async function getMapEdition(editionId: string) {
-  return apiRequest<MapEdition>({
+  return apiRequest<MapEdition[]>({
     method: 'GET',
     url: `/map/edition/${editionId}`,
-    fallbackData: mockEdition,
+    fallbackData: [mockEdition],
   });
 }
 
 export async function getChargingPoints(editionId: string) {
   return apiRequest<MapPoint[]>({
     method: 'GET',
-    url: `/map/edition/${editionId}/charge-point`,
+    url: `/map/edition/${editionId}/charging-stations`,
     fallbackData: mockChargingPoints,
   });
 }
@@ -51,7 +50,8 @@ export async function getChargingPoints(editionId: string) {
 export async function listNavigationPaths(editionId: string) {
   return apiRequest<PageResult<NavigationPath>>({
     method: 'GET',
-    url: `/map/edition/${editionId}/navigation-path/page`,
+    url: '/map/nav-path/page',
+    params: { editionId, pageNo: 1, pageSize: 20 },
     fallbackData: buildPageResult([mockNavigationPath]),
   });
 }
@@ -59,7 +59,8 @@ export async function listNavigationPaths(editionId: string) {
 export async function listTopologyPaths(editionId: string) {
   return apiRequest<PageResult<TopologyPath>>({
     method: 'GET',
-    url: `/map/edition/${editionId}/topology-path/page`,
+    url: '/map/topo-path/page',
+    params: { editionId, pageNo: 1, pageSize: 20 },
     fallbackData: buildPageResult([mockTopologyPath]),
   });
 }

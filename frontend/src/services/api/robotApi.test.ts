@@ -162,6 +162,29 @@ describe('robotApi', () => {
     });
   });
 
+  it('treats empty runtime rows as mock data', async () => {
+    http.defaults.adapter = vi.fn(async (config) => ({
+      data: {
+        result: {
+          rows: [],
+        },
+      },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })) as AxiosAdapter;
+
+    const result = await getRobotRuntime('robot-alpha');
+
+    expect(result).toMatchObject({
+      source: 'mock',
+      reason: 'Empty runtime response',
+      data: mockRuntime,
+    });
+    expect(result.data).not.toBe(mockRuntime);
+  });
+
   it('sends robot commands and returns real or mock task identifiers', async () => {
     const payload = buildCommandPayload('robot_tts', { text: 'hello' });
     http.defaults.adapter = vi.fn(async (config) => ({
@@ -178,9 +201,10 @@ describe('robotApi', () => {
       expect.objectContaining({
         method: 'post',
         url: '/robot/command/robot-alpha',
-        data: JSON.stringify(payload),
       }),
     );
+    const sentConfig = vi.mocked(http.defaults.adapter).mock.calls[0][0];
+    expect(JSON.parse(String(sentConfig.data))).toEqual(payload);
     expect(real).toEqual({ data: 'task-real', source: 'real' });
 
     http.defaults.adapter = vi.fn(async () => {
@@ -248,16 +272,10 @@ describe('mapApi', () => {
     vi.restoreAllMocks();
   });
 
-  it('gets map editions as a page and falls back to mock edition rows', async () => {
+  it('gets map editions and falls back to mock edition rows', async () => {
     http.defaults.adapter = vi.fn(async (config) => ({
       data: {
-        result: {
-          rows: [{ id: 'edition-real', mapId: 'map-real', name: 'Real', mapName: 'Map' }],
-          total_count: 1,
-          page_no: 1,
-          page_size: 10,
-          total_page: 1,
-        },
+        result: [{ id: 'edition-real', mapId: 'map-real', name: 'Real', mapName: 'Map' }],
       },
       status: 200,
       statusText: 'OK',
@@ -270,11 +288,10 @@ describe('mapApi', () => {
     expect(http.defaults.adapter).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'get',
-        url: '/map/edition/page',
-        params: { mapId: 'map-real' },
+        url: '/map/map-real/editions',
       }),
     );
-    expect(real.data.rows[0].id).toBe('edition-real');
+    expect(real.data[0].id).toBe('edition-real');
 
     http.defaults.adapter = vi.fn(async () => {
       throw new Error('offline');
@@ -283,8 +300,8 @@ describe('mapApi', () => {
     const fallback = await getMapEditions('map-main');
 
     expect(fallback.source).toBe('mock');
-    expect(fallback.data.rows).toHaveLength(1);
-    expect(fallback.data.total_count).toBe(1);
+    expect(fallback.data).toHaveLength(1);
+    expect(fallback.data[0].id).toBe('edition-main-v1');
   });
 
   it('gets map edition detail and map resources with mock fallbacks', async () => {
@@ -293,9 +310,9 @@ describe('mapApi', () => {
       seenUrls.push(config.url ?? '');
       return {
         data: {
-          result: config.url?.includes('charge-point')
+          result: config.url?.includes('charging-stations')
             ? [{ id: 'charge-real', uuid: 'charge-real', name: 'Charge', x: 1, y: 2, z: 0 }]
-            : config.url?.includes('navigation-path')
+            : config.url?.includes('nav-path')
               ? {
                   rows: [
                     {
@@ -308,7 +325,7 @@ describe('mapApi', () => {
                     },
                   ],
                 }
-              : config.url?.includes('topology-path')
+            : config.url?.includes('topo-path')
                 ? {
                     rows: [
                       {
@@ -322,7 +339,7 @@ describe('mapApi', () => {
                       },
                     ],
                   }
-                : { id: 'edition-real', mapId: 'map-real', name: 'Real', mapName: 'Map' },
+                : [{ id: 'edition-real', mapId: 'map-real', name: 'Real', mapName: 'Map' }],
         },
         status: 200,
         statusText: 'OK',
@@ -332,7 +349,7 @@ describe('mapApi', () => {
     }) as AxiosAdapter;
 
     await expect(getMapEdition('edition-real')).resolves.toMatchObject({
-      data: { id: 'edition-real' },
+      data: [{ id: 'edition-real' }],
       source: 'real',
     });
     await expect(getChargingPoints('edition-real')).resolves.toMatchObject({
@@ -353,9 +370,9 @@ describe('mapApi', () => {
     });
     expect(seenUrls).toEqual([
       '/map/edition/edition-real',
-      '/map/edition/edition-real/charge-point',
-      '/map/edition/edition-real/navigation-path/page',
-      '/map/edition/edition-real/topology-path/page',
+      '/map/edition/edition-real/charging-stations',
+      '/map/nav-path/page',
+      '/map/topo-path/page',
     ]);
 
     http.defaults.adapter = vi.fn(async () => {
@@ -363,7 +380,7 @@ describe('mapApi', () => {
     }) as AxiosAdapter;
 
     await expect(getMapEdition('edition-main-v1')).resolves.toMatchObject({
-      data: { id: 'edition-main-v1' },
+      data: [{ id: 'edition-main-v1' }],
       source: 'mock',
     });
     await expect(getChargingPoints('edition-main-v1')).resolves.toMatchObject({
