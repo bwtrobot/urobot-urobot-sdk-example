@@ -59,7 +59,7 @@ Write `frontend/package.json`:
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc -b --noEmit"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "axios": "^1.7.9",
