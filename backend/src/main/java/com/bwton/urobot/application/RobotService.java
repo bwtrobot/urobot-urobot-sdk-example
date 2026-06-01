@@ -2,6 +2,7 @@ package com.bwton.urobot.application;
 
 import com.bwton.urobot.infrastructure.lang.Page;
 import com.bwton.urobot.infrastructure.lang.PageQuery;
+import com.bwton.urobot.interfaces.response.RobotResponse;
 import com.bwton.utwin.opensdk.services.UTwinClient;
 import com.bwton.utwin.opensdk.services.robot.model.ListRobotsRequest;
 import com.bwton.utwin.opensdk.services.robot.model.ListRobotsResponse;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class RobotService {
@@ -19,7 +21,7 @@ public class RobotService {
         this.uTwinClient = uTwinClient;
     }
 
-    public Mono<Page<?>> page(PageQuery query) {
+    public Mono<Page<RobotResponse>> page(PageQuery query) {
         return Mono.fromSupplier(() -> {
 
                     ListRobotsRequest request = ListRobotsRequest.builder()
@@ -32,10 +34,12 @@ public class RobotService {
                 })
                 .map(response -> {
                     List<RobotItem> list = response.data();
-                    Page<RobotItem> page = new Page<>();
+                    Page<RobotResponse> page = new Page<>();
                     page.setPageNo(response.pageNum());
                     page.setPageSize(response.pageSize());
-                    page.setRows(list);
+                    page.setRows(list.stream()
+                            .map(RobotResponse::from)
+                            .collect(Collectors.toList()));
                     page.setTotalCount(Math.toIntExact(response.total()));
                     page.setTotalPage(Math.toIntExact(response.total() / response.pageSize()));
                     return page;
