@@ -1,7 +1,5 @@
+import { SpatialWorkbenchPage } from '../pages/workbench/SpatialWorkbenchPage';
+
 export function App() {
-  return (
-    <main className="app-shell">
-      <div className="app-placeholder">uRobot SDK Web Example</div>
-    </main>
-  );
+  return <SpatialWorkbenchPage />;
 }
