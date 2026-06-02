@@ -34,7 +34,7 @@ export function RenderDropdown({ settings, onChange }: RenderDropdownProps) {
         type="button"
         className="spatial-toolbar-button"
         aria-expanded={open}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         onClick={() => setOpen((value) => !value)}
       >
         <CircleDot size={16} aria-hidden="true" />
@@ -42,7 +42,7 @@ export function RenderDropdown({ settings, onChange }: RenderDropdownProps) {
       </button>
 
       {open ? (
-        <div className="spatial-dropdown-panel spatial-render-panel" role="menu">
+        <div className="spatial-dropdown-panel spatial-render-panel" role="dialog">
           <div className="spatial-control-group">
             <span className="spatial-control-label">点大小</span>
             <div className="spatial-segmented" role="group" aria-label="点大小">
@@ -88,7 +88,6 @@ export function RenderDropdown({ settings, onChange }: RenderDropdownProps) {
           <button
             type="button"
             className="spatial-menu-row"
-            role="menuitemcheckbox"
             aria-checked={settings.bimWireframe}
             onClick={() =>
               onChange({ ...settings, bimWireframe: !settings.bimWireframe })

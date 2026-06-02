@@ -1,4 +1,3 @@
-import SoonSpace from 'soonspacejs';
 import * as THREE from 'three';
 import type {
   MapEdition,
@@ -9,6 +8,11 @@ import type {
 } from '../../../shared/types/api';
 import { runtimePoseToSceneTransform } from '../../../shared/utils/pose';
 import type { LayerVisibility } from '../components/LayerDropdown';
+
+type SoonSpaceIntegrationPoint = {
+  loadBimModel?: (url: string) => Promise<THREE.Object3D>;
+  loadPointCloud?: (url: string) => Promise<THREE.Points>;
+};
 
 export interface RenderSettings {
   pointSize: 'small' | 'medium' | 'large';
@@ -26,11 +30,6 @@ export interface SpatialSceneAdapter {
   dispose(): void;
 }
 
-interface SoonSpaceHandle {
-  dispose?: () => void;
-  destroy?: () => void;
-}
-
 const pointSizes: Record<RenderSettings['pointSize'], number> = {
   small: 0.06,
   medium: 0.1,
@@ -44,14 +43,21 @@ const opacityValues: Record<RenderSettings['opacity'], number> = {
 };
 
 class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
+  // SoonSpaceJS model/PCD loaders will plug in here once real assets are available.
+  private readonly soonspaceLoaders: SoonSpaceIntegrationPoint | null = null;
   private container: HTMLDivElement | null = null;
-  private soonspace: SoonSpaceHandle | null = null;
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
   private renderer: THREE.WebGLRenderer | null = null;
   private frameId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private renderSettings: RenderSettings = {
+    pointSize: 'medium',
+    opacity: 'solid',
+    bimWireframe: false,
+  };
   private readonly groups = {
+    helpers: new THREE.Group(),
     bim: new THREE.Group(),
     globalPointCloud: new THREE.Group(),
     groundPointCloud: new THREE.Group(),
@@ -62,7 +68,6 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
   mount(container: HTMLDivElement) {
     this.dispose();
     this.container = container;
-    this.soonspace = new SoonSpace({ el: container }) as SoonSpaceHandle;
 
     const width = Math.max(container.clientWidth, 1);
     const height = Math.max(container.clientHeight, 1);
@@ -81,7 +86,7 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.75);
     directionalLight.position.set(8, 12, 6);
     scene.add(directionalLight);
-    scene.add(new THREE.GridHelper(20, 20, 0xc6d0dc, 0xe0e6ee));
+    this.groups.helpers.add(new THREE.GridHelper(20, 20, 0xc6d0dc, 0xe0e6ee));
 
     Object.values(this.groups).forEach((group) => scene.add(group));
     this.buildRobotMesh();
@@ -111,6 +116,7 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
     this.groups.groundPointCloud.add(
       this.createPointCloudPlaceholder(0x18a058, 1.6, edition.groundMap),
     );
+    this.applyRenderSettings();
   }
 
   updateRobotRuntime(runtime: RobotRuntime | null) {
@@ -172,6 +178,12 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
   }
 
   setRenderSettings(settings: RenderSettings) {
+    this.renderSettings = settings;
+    this.applyRenderSettings();
+  }
+
+  private applyRenderSettings() {
+    const settings = this.renderSettings;
     const pointSize = pointSizes[settings.pointSize];
     const opacity = opacityValues[settings.opacity];
 
@@ -221,9 +233,6 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
       this.renderer.domElement.remove();
     }
 
-    this.soonspace?.dispose?.();
-    this.soonspace?.destroy?.();
-    this.soonspace = null;
     this.scene = null;
     this.camera = null;
     this.renderer = null;
