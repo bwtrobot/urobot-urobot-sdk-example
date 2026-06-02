@@ -114,7 +114,8 @@ export async function sendRobotCommand(robotId: string, payload: RobotCommand) {
 }
 
 export async function getTaskResults(robotId: string, taskIds: string[]) {
-  const params = Object.fromEntries(taskIds.map((taskId, index) => [`taskIds[${index}]`, taskId]));
+  const params = new URLSearchParams();
+  taskIds.forEach((taskId) => params.append('taskIds', taskId));
 
   return apiRequest<TaskResult[]>({
     method: 'GET',

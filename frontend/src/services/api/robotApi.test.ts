@@ -219,7 +219,7 @@ describe('robotApi', () => {
     });
   });
 
-  it('requests task results with indexed task id query params and falls back per task', async () => {
+  it('requests task results with repeated taskIds query params and falls back per task', async () => {
     http.defaults.adapter = vi.fn(async (config) => ({
       data: {
         result: [
@@ -241,12 +241,10 @@ describe('robotApi', () => {
       expect.objectContaining({
         method: 'get',
         url: '/robot/task-result/robot-alpha',
-        params: {
-          'taskIds[0]': 'task-1',
-          'taskIds[1]': 'task-2',
-        },
       }),
     );
+    const callConfig = (http.defaults.adapter as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callConfig.params.toString()).toBe('taskIds=task-1&taskIds=task-2');
     expect(real).toEqual({
       data: [{ task_id: 'task-1', task_status: 'running' }],
       source: 'real',
