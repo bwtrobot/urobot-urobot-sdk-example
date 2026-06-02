@@ -62,7 +62,7 @@ function appendLog(entry: Omit<ApiLogEntry, 'id' | 'timestamp'>) {
 }
 
 export function getApiLogs(): ApiLogEntry[] {
-  return [...logs];
+  return logs;
 }
 
 getApiLogs.subscribe = (subscriber: ApiLogSubscriber) => {

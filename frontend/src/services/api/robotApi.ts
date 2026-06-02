@@ -1,4 +1,4 @@
-import { apiRequest } from './httpClient';
+import { apiRequest, type ApiRequestResult } from './httpClient';
 import {
   createMockTaskResult,
   mockRobots,
@@ -39,6 +39,14 @@ function buildPageResult<T>(rows: T[]): PageResult<T> {
   };
 }
 
+function normalizeRuntimeResponse(data: RobotRuntime | { rows?: RobotRuntime[] }): RobotRuntime | undefined {
+  if (data && typeof data === 'object' && 'rows' in data) {
+    return data.rows?.[0];
+  }
+
+  return data as RobotRuntime;
+}
+
 export function buildCommandPayload(
   commandCode: RobotCommandCode,
   commandParam: unknown,
@@ -71,17 +79,14 @@ export async function listRobots() {
   });
 }
 
-export async function getRobotRuntime(robotId: string) {
+export async function getRobotRuntime(robotId: string): Promise<ApiRequestResult<RobotRuntime>> {
   const runtime = await apiRequest<RobotRuntime | { rows?: RobotRuntime[] }>({
     method: 'GET',
     url: `/robot/runtime/${robotId}`,
     fallbackData: mockRuntime,
   });
 
-  const data = runtime.data;
-  const normalized = data && typeof data === 'object' && 'rows' in data
-    ? data.rows?.[0]
-    : data;
+  const normalized = normalizeRuntimeResponse(runtime.data);
 
   if (!normalized) {
     return {
@@ -93,7 +98,7 @@ export async function getRobotRuntime(robotId: string) {
 
   return {
     ...runtime,
-    data: normalized,
+      data: normalized,
   };
 }
 

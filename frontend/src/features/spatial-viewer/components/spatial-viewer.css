@@ -18,6 +18,21 @@
   min-height: 520px;
 }
 
+.spatial-viewer-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #475569;
+  background:
+    linear-gradient(90deg, rgb(148 163 184 / 16%) 1px, transparent 1px),
+    linear-gradient(rgb(148 163 184 / 16%) 1px, transparent 1px),
+    #f6f8fb;
+  background-size: 28px 28px;
+  text-align: center;
+}
+
 .spatial-toolbar {
   position: absolute;
   top: 16px;

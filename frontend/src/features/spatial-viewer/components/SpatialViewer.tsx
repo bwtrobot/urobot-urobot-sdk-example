@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   MapEdition,
   NavigationPath,
@@ -37,6 +37,8 @@ export function SpatialViewer({
 }: SpatialViewerProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const adapterRef = useRef(createSpatialScene());
+  const [viewerError, setViewerError] = useState<string | null>(null);
+  const [viewerReady, setViewerReady] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -46,36 +48,56 @@ export function SpatialViewer({
       return;
     }
 
-    adapter.mount(host);
+    setViewerError(null);
+    setViewerReady(false);
+
+    try {
+      adapter.mount(host);
+      setViewerReady(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '3D viewer unavailable';
+      setViewerError(message);
+    }
 
     return () => {
       adapter.dispose();
+      setViewerReady(false);
     };
   }, []);
 
   useEffect(() => {
+    if (!viewerReady) return;
     adapterRef.current.loadEdition(edition);
-  }, [edition]);
+  }, [edition, viewerReady]);
 
   useEffect(() => {
+    if (!viewerReady) return;
     adapterRef.current.updateRobotRuntime(runtime);
-  }, [runtime]);
+  }, [runtime, viewerReady]);
 
   useEffect(() => {
+    if (!viewerReady) return;
     adapterRef.current.setNavigationData(navPaths, topoPaths);
-  }, [navPaths, topoPaths]);
+  }, [navPaths, topoPaths, viewerReady]);
 
   useEffect(() => {
+    if (!viewerReady) return;
     adapterRef.current.setLayerVisibility(layers);
-  }, [layers]);
+  }, [layers, viewerReady]);
 
   useEffect(() => {
+    if (!viewerReady) return;
     adapterRef.current.setRenderSettings(renderSettings);
-  }, [renderSettings]);
+  }, [renderSettings, viewerReady]);
 
   return (
     <section className="spatial-viewer" aria-label="Spatial viewer">
       <div ref={hostRef} className="spatial-canvas-host" />
+      {viewerError ? (
+        <div className="spatial-viewer-fallback" role="status">
+          3D 视图不可用：{viewerError}
+        </div>
+      ) : null}
 
       <div className="spatial-toolbar" aria-label="Spatial viewer toolbar">
         <LayerDropdown layers={layers} onChange={onLayersChange} />
