@@ -1,6 +1,6 @@
-# Repository Guidelines
+# CLAUDE.md
 
-This file provides guidance to Codex when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 机器人操作代码强约定
 

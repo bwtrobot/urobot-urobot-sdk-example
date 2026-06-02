@@ -13,10 +13,10 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("robot")
-public class BaseHanlder {
+public class BaseHandler {
     private final RobotService service;
 
-    public BaseHanlder(RobotService service) {
+    public BaseHandler(RobotService service) {
         this.service = service;
     }
 

@@ -1713,7 +1713,7 @@ git commit -m "feat: add spatial viewer shell"
 - Create: `frontend/src/features/robot-execution/components/robot-execution.css`
 - Test: `frontend/src/features/robot-execution/components/MotionPad.test.tsx`
 
-- [ ] **Step 1: Write MotionPad tests**
+- [x] **Step 1: Write MotionPad tests**
 
 Write `frontend/src/features/robot-execution/components/MotionPad.test.tsx`:
 
@@ -1744,13 +1744,13 @@ describe('MotionPad', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing MotionPad tests**
+- [x] **Step 2: Run failing MotionPad tests**
 
 Run: `npm run test -- src/features/robot-execution/components/MotionPad.test.tsx`
 
 Expected: FAIL because `MotionPad.tsx` does not exist.
 
-- [ ] **Step 3: Add robot workbench hook**
+- [x] **Step 3: Add robot workbench hook**
 
 Write `frontend/src/features/robot-execution/hooks/useRobotWorkbench.ts`:
 
@@ -1896,7 +1896,7 @@ export function useRobotWorkbench() {
 }
 ```
 
-- [ ] **Step 4: Add execution components**
+- [x] **Step 4: Add execution components**
 
 Write `frontend/src/features/robot-execution/components/MotionPad.tsx`:
 
@@ -2197,13 +2197,13 @@ Write `frontend/src/features/robot-execution/components/robot-execution.css`:
 }
 ```
 
-- [ ] **Step 5: Verify MotionPad tests**
+- [x] **Step 5: Verify MotionPad tests**
 
 Run: `npm run test -- src/features/robot-execution/components/MotionPad.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/features/robot-execution
@@ -2219,7 +2219,7 @@ git commit -m "feat: add robot execution components"
 - Create: `frontend/src/pages/workbench/spatial-workbench-page.css`
 - Modify: `frontend/src/app/App.tsx`
 
-- [ ] **Step 1: Add API debug drawer**
+- [x] **Step 1: Add API debug drawer**
 
 Write `frontend/src/shared/components/ApiDebugDrawer.tsx`:
 
@@ -2321,7 +2321,7 @@ Write `frontend/src/shared/components/api-debug-drawer.css`:
 }
 ```
 
-- [ ] **Step 2: Compose SpatialWorkbenchPage**
+- [x] **Step 2: Compose SpatialWorkbenchPage**
 
 Write `frontend/src/pages/workbench/SpatialWorkbenchPage.tsx`:
 
@@ -2470,7 +2470,7 @@ Write `frontend/src/pages/workbench/spatial-workbench-page.css`:
 }
 ```
 
-- [ ] **Step 3: Wire App to workbench page**
+- [x] **Step 3: Wire App to workbench page**
 
 Replace `frontend/src/app/App.tsx`:
 
@@ -2482,13 +2482,13 @@ export function App() {
 }
 ```
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 Run: `npm run build`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/shared/components frontend/src/pages/workbench frontend/src/app/App.tsx
@@ -2500,25 +2500,25 @@ git commit -m "feat: compose spatial workbench page"
 **Files:**
 - Modify only if verification finds a concrete issue.
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `npm run test`
 
 Expected: all Vitest tests pass.
 
-- [ ] **Step 2: Run production build**
+- [x] **Step 2: Run production build**
 
 Run: `npm run build`
 
 Expected: TypeScript and Vite build pass.
 
-- [ ] **Step 3: Start local dev server**
+- [x] **Step 3: Start local dev server**
 
 Run: `npm run dev -- --port 5173`
 
 Expected: Vite prints a local URL such as `http://localhost:5173/`.
 
-- [ ] **Step 4: Browser verify workbench**
+- [x] **Step 4: Browser verify workbench**
 
 Open the local URL and verify:
 
@@ -2530,7 +2530,7 @@ Open the local URL and verify:
 - Debug drawer opens and shows real requests or Mock fallback reasons.
 - On backend endpoint failure, the page stays usable and displays demo data.
 
-- [ ] **Step 5: Commit fixes or verification note**
+- [x] **Step 5: Commit fixes or verification note**
 
 If fixes were needed:
 
