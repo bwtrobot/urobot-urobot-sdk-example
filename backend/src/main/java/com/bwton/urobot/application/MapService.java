@@ -58,8 +58,9 @@ public class MapService {
             List<Map<String, Object>> rows = resp.data().stream().map(item -> {
                 GetNavPathPointsResponse detail = uTwinClient.map().navPath().getPoints(
                         GetNavPathPointsRequest.builder().id(item.uuid()).build());
-                return navPathDetailToMap(detail.detail());
-            }).collect(Collectors.toList());
+                // 详情可能为空，跳过无数据的路径
+                return detail.detail() != null ? navPathDetailToMap(detail.detail()) : null;
+            }).filter(Objects::nonNull).collect(Collectors.toList());
 
             Page<Map<String, Object>> page = new Page<>();
             page.setRows(rows);
@@ -83,8 +84,9 @@ public class MapService {
             List<Map<String, Object>> rows = resp.data().stream().map(item -> {
                 GetTopoPathPointsResponse detail = uTwinClient.map().topoPath().getPoints(
                         GetTopoPathPointsRequest.builder().id(item.uuid()).build());
-                return topoPathDetailToMap(detail.detail());
-            }).collect(Collectors.toList());
+                // 详情可能为空，跳过无数据的路径
+                return detail.detail() != null ? topoPathDetailToMap(detail.detail()) : null;
+            }).filter(Objects::nonNull).collect(Collectors.toList());
 
             Page<Map<String, Object>> page = new Page<>();
             page.setRows(rows);

@@ -1,9 +1,11 @@
 package com.bwton.urobot.interfaces.request;
 
+import java.util.Map;
+
 public class SendCommandBody {
     private Integer type;
     private String messagesType;
-    private Object params;
+    private Map<String, Object> params;
     private String callbackUrl;
 
     public Integer getType() {
@@ -22,11 +24,11 @@ public class SendCommandBody {
         this.messagesType = messagesType;
     }
 
-    public Object getParams() {
+    public Map<String, Object> getParams() {
         return params;
     }
 
-    public void setParams(Object params) {
+    public void setParams(Map<String, Object> params) {
         this.params = params;
     }
 
