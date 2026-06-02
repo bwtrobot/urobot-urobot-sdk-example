@@ -3,10 +3,11 @@ import type { RobotCommandCode } from '../../../services/api/robotApi';
 import './robot-execution.css';
 
 interface CommandPanelProps {
+  robotName?: string;
   onCommand: (commandCode: RobotCommandCode, commandParam: unknown) => void;
 }
 
-export function CommandPanel({ onCommand }: CommandPanelProps) {
+export function CommandPanel({ robotName, onCommand }: CommandPanelProps) {
   return (
     <section className="side-card">
       <h2>快捷指令</h2>
@@ -19,7 +20,11 @@ export function CommandPanel({ onCommand }: CommandPanelProps) {
           <Megaphone size={16} />
           语音
         </button>
-        <button type="button" onClick={() => onCommand('charge_manager', { charge: true })}>
+        <button
+          type="button"
+          disabled={!robotName}
+          onClick={() => onCommand('charge_manager', { action: 'charge_start', robot_name: robotName })}
+        >
           <BatteryCharging size={16} />
           充电
         </button>

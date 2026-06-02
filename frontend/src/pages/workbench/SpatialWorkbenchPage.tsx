@@ -24,13 +24,20 @@ const defaultRenderSettings: RenderSettings = {
   bimWireframe: false,
 };
 
+const moveKeyByDirection: Record<MoveDirection, string> = {
+  forward: 'ArrowUp',
+  backward: 'ArrowDown',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
+};
+
 export function SpatialWorkbenchPage() {
   const workbench = useRobotWorkbench();
   const [layers, setLayers] = useState(defaultLayers);
   const [renderSettings, setRenderSettings] = useState(defaultRenderSettings);
 
   function handleMove(direction: MoveDirection) {
-    void workbench.sendCommand('base_move', { direction, speed: 0.3 });
+    void workbench.sendCommand('base_move', { key: moveKeyByDirection[direction] });
   }
 
   function handleRotate(angularVelocity: number) {
@@ -74,7 +81,10 @@ export function SpatialWorkbenchPage() {
         <aside className="workbench-side">
           <RobotStatusCard robot={workbench.selectedRobot} runtime={workbench.runtime} demoMode={workbench.demoMode} />
           <NavigationTargetPanel navPaths={workbench.navPaths} topoPaths={workbench.topoPaths} />
-          <CommandPanel onCommand={(commandCode, commandParam) => void workbench.sendCommand(commandCode, commandParam)} />
+          <CommandPanel
+            robotName={workbench.selectedRobot?.name}
+            onCommand={(commandCode, commandParam) => void workbench.sendCommand(commandCode, commandParam)}
+          />
           <TaskTimeline tasks={workbench.tasks} />
         </aside>
       </div>

@@ -55,12 +55,22 @@ public class MapService {
                     .build();
             ListNavPathsResponse resp = uTwinClient.map().navPath().list(req);
 
-            List<Map<String, Object>> rows = resp.data().stream().map(item -> {
-                GetNavPathPointsResponse detail = uTwinClient.map().navPath().getPoints(
-                        GetNavPathPointsRequest.builder().id(item.uuid()).build());
-                // 详情可能为空，跳过无数据的路径
-                return detail.detail() != null ? navPathDetailToMap(detail.detail()) : null;
+            List<String> ids = resp.data().parallelStream().map(item -> {
+                GetNavPathByUuidResponse edition = uTwinClient.map().navPath().getByUuid(
+                        GetNavPathByUuidRequest.builder()
+                                .uuid(item.uuid())
+                                .editionId(editionId)
+                                .build());
+                return edition.navPath() != null ? edition.navPath().id() : null;
             }).filter(Objects::nonNull).collect(Collectors.toList());
+
+            List<Map<String, Object>> rows = ids.isEmpty()
+                    ? Collections.emptyList()
+                    : uTwinClient.map().navPath().listPoints(ListNavPathPointsRequest.builder().ids(ids).build())
+                    .data().stream()
+                    .filter(Objects::nonNull)
+                    .map(this::navPathDetailToMap)
+                    .collect(Collectors.toList());
 
             Page<Map<String, Object>> page = new Page<>();
             page.setRows(rows);
@@ -81,12 +91,22 @@ public class MapService {
                     .build();
             ListTopoPathsResponse resp = uTwinClient.map().topoPath().list(req);
 
-            List<Map<String, Object>> rows = resp.data().stream().map(item -> {
-                GetTopoPathPointsResponse detail = uTwinClient.map().topoPath().getPoints(
-                        GetTopoPathPointsRequest.builder().id(item.uuid()).build());
-                // 详情可能为空，跳过无数据的路径
-                return detail.detail() != null ? topoPathDetailToMap(detail.detail()) : null;
+            List<String> ids = resp.data().parallelStream().map(item -> {
+                GetTopoPathByUuidResponse edition = uTwinClient.map().topoPath().getByUuid(
+                        GetTopoPathByUuidRequest.builder()
+                                .uuid(item.uuid())
+                                .editionId(editionId)
+                                .build());
+                return edition.topoPath() != null ? edition.topoPath().id() : null;
             }).filter(Objects::nonNull).collect(Collectors.toList());
+
+            List<Map<String, Object>> rows = ids.isEmpty()
+                    ? Collections.emptyList()
+                    : uTwinClient.map().topoPath().listPoints(ListTopoPathPointsRequest.builder().ids(ids).build())
+                    .data().stream()
+                    .filter(Objects::nonNull)
+                    .map(this::topoPathDetailToMap)
+                    .collect(Collectors.toList());
 
             Page<Map<String, Object>> page = new Page<>();
             page.setRows(rows);
@@ -136,6 +156,7 @@ public class MapService {
         m.put("mapName", d.mapName());
         m.put("editionId", d.editionId());
         m.put("editionName", d.editionName());
+        m.put("coordinateFrame", "THREE");
         if (d.nodes() != null) {
             m.put("nodes", d.nodes().stream().map(n -> {
                 Map<String, Object> nm = new LinkedHashMap<>();
@@ -160,6 +181,7 @@ public class MapService {
         m.put("mapName", d.mapName());
         m.put("editionId", d.editionId());
         m.put("editionName", d.editionName());
+        m.put("coordinateFrame", "THREE");
         if (d.nodes() != null) {
             m.put("nodes", d.nodes().stream().map(n -> {
                 Map<String, Object> nm = new LinkedHashMap<>();

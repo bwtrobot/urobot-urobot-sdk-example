@@ -32,7 +32,9 @@ public class RobotHandler {
     @GetMapping("task-result/{robotId}")
     public Mono<Result<List<Map<String, Object>>>> taskResult(
             @PathVariable String robotId,
-            @RequestParam("taskIds") List<String> taskIds) {
-        return service.getTaskResult(robotId, taskIds).map(Result::ok);
+            @RequestParam(value = "task_ids", required = false) List<String> taskIds,
+            @RequestParam(value = "taskIds", required = false) List<String> legacyTaskIds) {
+        List<String> resolvedTaskIds = taskIds != null ? taskIds : legacyTaskIds;
+        return service.getTaskResult(robotId, resolvedTaskIds).map(Result::ok);
     }
 }

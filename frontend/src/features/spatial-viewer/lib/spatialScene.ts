@@ -136,6 +136,7 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
       const line = this.createLineFromPositions(
         path.nodes.map((node) => node.position),
         0xf97316,
+        path.coordinateFrame,
       );
       if (line) this.groups.paths.add(line);
     });
@@ -147,7 +148,11 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
         const end = nodeById.get(edge.enode);
         if (!start || !end) return;
 
-        const line = this.createLineFromPositions([start, end], 0x6366f1);
+        const line = this.createLineFromPositions(
+          [start, end],
+          0x6366f1,
+          path.coordinateFrame,
+        );
         if (line) this.groups.paths.add(line);
       });
     });
@@ -247,12 +252,18 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
 
   // ── 路径渲染 ──
 
-  private createLineFromPositions(positions: Vector3Value[], color: number) {
+  private createLineFromPositions(
+    positions: Vector3Value[],
+    color: number,
+    coordinateFrame: 'ROBOT' | 'THREE' = 'ROBOT',
+  ) {
     if (positions.length < 2) return null;
 
-    // ROS 坐标 → Three.js 坐标，+0.03 Y 偏移避免 Z-fighting
+    // 路径详情可能来自 SDK 的 THREE 坐标，也可能来自 mock/旧接口的 ROBOT 坐标。
     const points = positions.map((p) => {
-      const v = rosPositionToThree(p);
+      const v = coordinateFrame === 'THREE'
+        ? new THREE.Vector3(p.x, p.y, p.z)
+        : rosPositionToThree(p);
       v.y += 0.03;
       return v;
     });

@@ -138,6 +138,7 @@ export interface TopologyPath {
   mapName?: string;
   editionId: string;
   editionName?: string;
+  coordinateFrame?: 'ROBOT' | 'THREE';
   nodes: PathNode[];
   edges: PathEdge[];
 }
@@ -150,6 +151,7 @@ export interface NavigationPath {
   mapName?: string;
   editionId: string;
   editionName?: string;
+  coordinateFrame?: 'ROBOT' | 'THREE';
   nodes: PathNode[];
 }
 

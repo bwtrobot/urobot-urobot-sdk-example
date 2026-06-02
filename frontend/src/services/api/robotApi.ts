@@ -24,6 +24,17 @@ export type RobotCommandCode =
 
 let idCounter = 0;
 
+const commandTypeByCode: Record<RobotCommandCode, number> = {
+  navigation: 0,
+  topology_navigation: 22,
+  robot_tts: 33,
+  charge_manager: 23,
+  robot_pause: 21,
+  emergency_stop: 20,
+  base_move: 23,
+  cmd_vel: 23,
+};
+
 function createUniqueId(prefix: string) {
   idCounter += 1;
   return `${prefix}-${Date.now()}-${idCounter}-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
@@ -55,8 +66,8 @@ export function buildCommandPayload(
   const commandId = createUniqueId('command');
 
   return {
-    type: 1,
-    messagesType: 'task',
+    type: commandTypeByCode[commandCode],
+    messagesType: 'task_submit',
     params: {
       task_id: taskId,
       task_command_info: [
@@ -115,7 +126,7 @@ export async function sendRobotCommand(robotId: string, payload: RobotCommand) {
 
 export async function getTaskResults(robotId: string, taskIds: string[]) {
   const params = new URLSearchParams();
-  taskIds.forEach((taskId) => params.append('taskIds', taskId));
+  taskIds.forEach((taskId) => params.append('task_ids', taskId));
 
   return apiRequest<TaskResult[]>({
     method: 'GET',

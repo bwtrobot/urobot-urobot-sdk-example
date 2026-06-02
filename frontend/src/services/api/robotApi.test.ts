@@ -31,8 +31,8 @@ describe('robotApi', () => {
     const second = buildCommandPayload('cmd_vel', { linear: 0.5 });
 
     expect(first).toMatchObject({
-      type: 1,
-      messagesType: 'task',
+      type: 0,
+      messagesType: 'task_submit',
       params: {
         task_command_info: [
           {
@@ -46,6 +46,7 @@ describe('robotApi', () => {
     expect(first.params.task_id).toEqual(expect.any(String));
     expect(first.params.task_command_info[0].command_id).toEqual(expect.any(String));
     expect(second.params.task_id).toEqual(expect.any(String));
+    expect(second.type).toBe(23);
     expect(second.params.task_command_info[0].command_id).toEqual(expect.any(String));
     expect(second.params.task_id).not.toBe(first.params.task_id);
     expect(second.params.task_command_info[0].command_id).not.toBe(
@@ -244,7 +245,7 @@ describe('robotApi', () => {
       }),
     );
     const callConfig = (http.defaults.adapter as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(callConfig.params.toString()).toBe('taskIds=task-1&taskIds=task-2');
+    expect(callConfig.params.toString()).toBe('task_ids=task-1&task_ids=task-2');
     expect(real).toEqual({
       data: [{ task_id: 'task-1', task_status: 'running' }],
       source: 'real',

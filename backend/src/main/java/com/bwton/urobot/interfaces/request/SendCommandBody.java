@@ -1,10 +1,14 @@
 package com.bwton.urobot.interfaces.request;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+
 import java.util.Map;
 
 public class SendCommandBody {
     private Integer type;
-    private String messagesType;
+    @JsonAlias("messages_type")
+    private String messagesType = "task_submit";
+    @JsonAlias("data")
     private Map<String, Object> params;
     private String callbackUrl;
 
@@ -21,7 +25,9 @@ public class SendCommandBody {
     }
 
     public void setMessagesType(String messagesType) {
-        this.messagesType = messagesType;
+        if (messagesType != null && !messagesType.trim().isEmpty()) {
+            this.messagesType = messagesType;
+        }
     }
 
     public Map<String, Object> getParams() {

@@ -1,0 +1,312 @@
+中枢 -> 机器人， 位姿初始化
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "pose_init",
+            "command_param": {
+                "position": {
+                    "x": 16.729700088500977,
+                    "y": 2.7626962661743164,
+                    "z": 0.7390349507331848
+                },
+                "orientation": {
+                    "x": 0.015247882919353991,
+                    "y": -0.019472284818476116,
+                    "z": -0.08559899335881167,
+                    "w": 0.9960226626570221
+                }
+            }
+        }
+    ]
+}
+自定义订阅消息任务
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "subscribe_manage",
+            "command_param": {
+                "op": "subscribe",
+                "topic": "robot_info_planer"
+            }
+        }
+    ]
+}
+取消订阅消息任务
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "subscribe_manage",
+            "command_param": {
+                "op": "unsubscribe",
+                "topic": "robot_info_planer"
+            }
+        }
+    ]
+}
+中枢 -> 机器人， 前后左右基础运动
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "base_move",
+            "command_param": {
+                "key": "ArrowUp" //ArrowDown 向下 ArrowLeft 向左 ArrowRight 向右
+            }
+        }
+    ]
+}
+中枢 -> 机器人， 导航
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "navigation",
+            "command_param": {
+                "position": {
+                    "x": "1.2",
+                    "y": "0.2",
+                    "z": "0.3"
+                },
+                "orientation": {
+                    "x": "1.2",
+                    "y": "0.2",
+                    "z": "0.3",
+                    "w": "0.1"
+                }
+            }
+        },
+        {
+            "command_code": "fire_escape_blocked"
+        },
+        {
+            "command_code": "fire_door_closed"
+        }
+    ]
+}
+地图构建
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "point_cloud_map_build",
+            "command_param": {
+                "build_flag": "start", // start 开始构建 end 完成构建 cancel 取消建图 refresh 刷新地图
+                "map_file_name": "primary"
+            }
+        }
+    ]
+}
+地图激活
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "point_cloud_map_active",
+            "command_param": {
+                "map_file_name": "F4_map"
+            }
+        }
+    ]
+}
+讲解节点预览、以及讲解
+{
+    "type": 0,
+    "params": {
+        "task_id": "b88244e7-a204-41f3-b55c-7fcf8c037433",
+        "task_command_info": [
+            {
+                "command_id": "1234142342151",
+                "command_code": "exhibition_guide",
+                "command_param": {
+                    "text": "我不是一个机器人，我是真的人",
+                    "estimated_time": 8,
+                    "url": "http://192.168.60.5:8080/api/smc/v1/file/pre-signed-access/bwton/tmp/74e87013-c90f-47bb-92ed-a1090c9ac785.csv",
+                    "action_delay": 1,
+                    "delay": 1
+                }
+            },
+            {
+                "command_id": "1234142342151",
+                "command_code": "exhibition_guide",
+                "command_param": {
+                    "text": "我不是一个机器人，我是真的人",
+                    "estimated_time": 8,
+                    "url": "http://192.168.60.5:8080/api/smc/v1/file/pre-signed-access/bwton/tmp/74e87013-c90f-47bb-92ed-a1090c9ac785.csv",
+                    "action_delay": 1,
+                    "delay": 1
+                }
+            }
+        ]
+    }
+}
+导航+讲解
+
+{
+    "type": 0,
+    "params": {
+        "task_id": "b88244e7-a204-41f3-b55c-7fcf8c037433",
+        "task_command_info": [
+            {
+                "command_id": "213123123123120",
+                "command_code": "navigation",
+                "command_param": {
+                    "position": {
+                        "x": 1.7728794813156128,
+                        "y": 2.3407607078552246,
+                        "z": 0.09982847422361374
+                    },
+                    "orientation": {
+                        "x": -0.00032017101482712283,
+                        "y": -0.028060900904608953,
+                        "z": 0.010885651262979683,
+                        "w": 0.999546890309566
+                    }
+                },
+                "parallel_commands": [
+                    {
+                        "command_id": "1234142342151",
+                        "command_code": "exhibition_guide",
+                        "command_param": {
+                            "text": "我不是一个机器人，我是真的人",
+                            "estimated_time": 8,
+                            "url": "http://192.168.60.5:8080/api/smc/v1/file/pre-signed-access/bwton/tmp/74e87013-c90f-47bb-92ed-a1090c9ac785.csv",
+                            "action_delay": 1,
+                            "delay": 1
+                        }
+                    },
+                    {
+                        "command_id": "1234142342152",
+                        "command_code": "exhibition_guide",
+                        "command_param": {
+                            "text": "我不是一个吃的撒吃的撒出多少",
+                            "estimated_time": 8,
+                            "url": "http://192.168.60.5:8080/api/smc/v1/file/pre-signed-access/bwton/tmp/74e87013-c90f-47bb-92ed-a1090c9ac785.csv",
+                            "action_delay": 1,
+                            "delay": 1
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+拓扑导航
+{
+    "task_id": "bb613979-b118-44b9-a99b-2754efe3f315",
+    "task_command_info": [
+        {
+            "command_id": "682c68d3-3218-4e38-ab2f-d53e3e73f899",
+            "command_code": "topology_navigation",
+            "command_param": {
+                "point": [
+                    {
+                        "position": {
+                            "x": 2.2522,
+                            "y": -0.881949538099388,
+                            "z": -1.3875
+                        },
+                        "orientation": {
+                            "x": -0.014707664919881869,
+                            "y": 0.7203878073631774,
+                            "z": 0.6934150971808892,
+                            "w": -7.711009636985258E-4
+                        },
+                        "nav_voice_control": false
+                    }
+                ]
+            },
+            "parallel_commands": []
+        }
+    ]
+}
+
+
+蹲下
+{
+    "type": 0,
+    "params": {
+        "task_id": "94745c10-f70c-4fac-91d7-e25569337d4c",
+        "task_command_info": [
+            {
+                "command_id": "3ad46929-7ea3-4881-ab50-0a9db6cf21c7",
+                "command_code": "base_move",
+                "command_param": {
+                    "key": "lie"
+                }
+            }
+        ]
+    }
+}
+
+站立
+{
+    "type": 0,
+    "params": {
+        "task_id": "0aa8d6a3-bc04-4321-a334-01a1d0dd6868",
+        "task_command_info": [
+            {
+                "command_id": "8de7489e-1e4b-4ca2-948a-5c16076a40b0",
+                "command_code": "base_move",
+                "command_param": {
+                    "key": "stand"
+                }
+            }
+        ]
+    }
+}
+
+机器⼈语⾳播报
+
+{
+  "task_id": "123",
+  "task_command_info": [
+    {
+      "command_id": "456",
+      "command_code": "robot_tts",
+      "command_param": {"text":"123"},
+      "parallel_commands":null
+    }
+  ]
+}
+
+机器⼈充电
+{
+  "task_id": "123",
+  "task_command_info": [
+    {
+      "command_id": "456",
+      "command_code": "charge_manager",
+      "command_param": {
+           "action": "charge_start", // charge_start、charge_stop
+           "robot_name": "X30"
+      },
+      "parallel_commands":null
+    }
+  ]
+}
+机器人基础运动
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_code": "cmd_vel",
+            "command_param": {"linear": {"x": 0.20300, "y": 0.00000, "z": 0.0}, "angular": {"x": 0.0, "y": 0.0, "z": 0.00000}, "timestamp": "2026-02-02 10:23:10.541"}
+        }
+    ]
+}
+机器⼈Shell
+{
+    "task_id": "123123",
+    "task_command_info": [
+        {
+            "command_id": "123123",
+            "command_code": "robot_shell",
+            "command_param": {
+                "command": "ps -ef"
+            }
+        }
+    ]
+}

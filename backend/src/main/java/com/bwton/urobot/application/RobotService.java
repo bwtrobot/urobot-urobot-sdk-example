@@ -10,9 +10,11 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,15 +58,49 @@ public class RobotService {
 
     public Mono<String> sendCommand(String robotId, SendCommandBody body) {
         return Mono.fromSupplier(() -> {
-            SendCommandRequest request = SendCommandRequest.builder()
-                    .robotId(robotId)
-                    .type(body.getType())
-                    .messagesType(body.getMessagesType())
-                    .params(body.getParams())
-                    .callbackUrl(body.getCallbackUrl())
-                    .build();
-            return uTwinClient.robot().sendCommand(request).taskId();
+            Map<String, Object> params = normalizeCommandParams(body.getParams());
+            Map<String, Object> requestBody = new LinkedHashMap<>();
+            requestBody.put("type", body.getType());
+            requestBody.put("messagesType", normalizeMessagesType(body.getMessagesType()));
+            requestBody.put("params", params);
+            if (body.getCallbackUrl() != null && !body.getCallbackUrl().trim().isEmpty()) {
+                requestBody.put("callbackUrl", body.getCallbackUrl());
+            }
+
+            SendCommandResponse response = uTwinClient.httpClient().post(
+                    "/robot/command/" + robotId,
+                    Collections.emptyMap(),
+                    requestBody,
+                    SendCommandResponse.class,
+                    uTwinClient.tokenManager(),
+                    uTwinClient.retryPolicy());
+            return response.taskId();
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private String normalizeMessagesType(String messagesType) {
+        if (messagesType == null || messagesType.trim().isEmpty()) {
+            return "task_submit";
+        }
+        return messagesType;
+    }
+
+    private Map<String, Object> normalizeCommandParams(Map<String, Object> rawParams) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (rawParams != null) {
+            params.putAll(rawParams);
+        }
+
+        Object taskId = params.get("task_id");
+        if (taskId == null || String.valueOf(taskId).trim().isEmpty()) {
+            taskId = params.remove("taskId");
+        }
+        if (taskId == null || String.valueOf(taskId).trim().isEmpty()) {
+            taskId = UUID.randomUUID().toString();
+        }
+        params.put("task_id", taskId);
+
+        return params;
     }
 
     public Mono<List<Map<String, Object>>> getTaskResult(String robotId, List<String> taskIds) {

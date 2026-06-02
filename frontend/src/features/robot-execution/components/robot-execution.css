@@ -1,4 +1,7 @@
 .side-card {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
   border: 1px solid #d7dee8;
   border-radius: 8px;
   padding: 14px;
@@ -76,6 +79,11 @@
   cursor: pointer;
 }
 
+.command-grid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .command-grid .danger {
   color: #b91c1c;
   border-color: #fecaca;
@@ -89,13 +97,24 @@
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 6px;
+  box-sizing: border-box;
   border: 1px solid rgba(82, 100, 126, 0.32);
   border-radius: 12px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.9);
 }
 
+.motion-pad > * {
+  min-width: 0;
+  min-height: 0;
+}
+
 .motion-pad button {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  padding: 0;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #fff;
@@ -109,6 +128,7 @@
 .task-list {
   display: grid;
   gap: 8px;
+  min-width: 0;
   max-height: 210px;
   overflow: auto;
 }
@@ -116,13 +136,26 @@
 .task-row {
   display: grid;
   gap: 4px;
+  min-width: 0;
   border-radius: 6px;
   padding: 8px;
   background: #f8fafc;
+}
+
+.task-row > * {
+  min-width: 0;
 }
 
 .task-row code,
 .muted {
   color: #64748b;
   font-size: 12px;
+}
+
+.task-row code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
 }
