@@ -12,7 +12,15 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@soonspacejs/plugin-atmosphere": "^2.15.8",
     "@soonspacejs/plugin-cps-soonmanager": "^2.15.8",
+    "@soonspacejs/plugin-effect": "^2.15.8",
+    "@soonspacejs/plugin-fds": "^2.15.8",
+    "@soonspacejs/plugin-flow": "^2.15.8",
+    "@soonspacejs/plugin-gs3d-loader": "^2.15.8",
+    "@soonspacejs/plugin-poi-renderer": "^2.15.8",
+    "@soonspacejs/plugin-tiles": "^2.15.8",
+    "@testing-library/dom": "^10.4.1",
     "axios": "^1.7.9",
     "camera-controls": "^3.1.2",
     "lucide-react": "^0.468.0",
@@ -21,7 +29,9 @@
     "react-dom": "^18.3.1",
     "soonspacejs": "^2.15.8",
     "three": "^0.184.0",
-    "three-mesh-bvh": "^0.9.9"
+    "three-mesh-bvh": "^0.9.9",
+    "um-3d-tiles-renderer": "^0.4.48",
+    "umanager-animation-parser": "^0.0.6"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
