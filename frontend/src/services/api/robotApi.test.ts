@@ -362,7 +362,7 @@ describe('mapApi', () => {
     });
     expect(http.defaults.adapter).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        params: { editionId: 'edition-real', page_no: 1, page_size: 20 },
+        params: { editionId: 'edition-real', pageNo: 1, pageSize: 20 },
       }),
     );
     await expect(listTopologyPaths('edition-real')).resolves.toMatchObject({
@@ -373,7 +373,7 @@ describe('mapApi', () => {
     });
     expect(http.defaults.adapter).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        params: { editionId: 'edition-real', page_no: 1, page_size: 20 },
+        params: { editionId: 'edition-real', pageNo: 1, pageSize: 20 },
       }),
     );
     expect(seenUrls).toEqual([

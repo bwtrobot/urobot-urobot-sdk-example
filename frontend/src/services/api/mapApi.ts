@@ -51,7 +51,7 @@ export async function listNavigationPaths(editionId: string) {
   return apiRequest<PageResult<NavigationPath>>({
     method: 'GET',
     url: '/map/nav-path/page',
-    params: { editionId, page_no: 1, page_size: 20 },
+    params: { editionId, pageNo: 1, pageSize: 20 },
     fallbackData: buildPageResult([mockNavigationPath]),
   });
 }
@@ -60,7 +60,7 @@ export async function listTopologyPaths(editionId: string) {
   return apiRequest<PageResult<TopologyPath>>({
     method: 'GET',
     url: '/map/topo-path/page',
-    params: { editionId, page_no: 1, page_size: 20 },
+    params: { editionId, pageNo: 1, pageSize: 20 },
     fallbackData: buildPageResult([mockTopologyPath]),
   });
 }
