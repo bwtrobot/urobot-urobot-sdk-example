@@ -88,7 +88,7 @@ export function RenderDropdown({ settings, onChange }: RenderDropdownProps) {
           <button
             type="button"
             className="spatial-menu-row"
-            aria-checked={settings.bimWireframe}
+            aria-pressed={settings.bimWireframe}
             onClick={() =>
               onChange({ ...settings, bimWireframe: !settings.bimWireframe })
             }
