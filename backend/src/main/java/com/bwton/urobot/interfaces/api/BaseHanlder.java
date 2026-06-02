@@ -22,11 +22,6 @@ public class BaseHanlder {
 
     @GetMapping(value = "page")
     public Mono<Result<Page<RobotResponse>>> page(@ModelAttribute PageQuery pageQuery) {
-        return service.page(pageQuery)
-                .map(page -> {
-                    Result<Page<RobotResponse>> result = new Result<>();
-                    result.setResult(page);
-                    return result;
-                });
+        return service.page(pageQuery).map(Result::ok);
     }
 }
