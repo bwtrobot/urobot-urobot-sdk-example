@@ -1,0 +1,128 @@
+.side-card {
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.side-card h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.side-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.demo-badge {
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #92400e;
+  background: #fef3c7;
+  font-size: 12px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.status-grid dt {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.status-grid dd {
+  margin: 2px 0 0;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.side-card label {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.side-card select {
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0 8px;
+}
+
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.command-grid button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.command-grid .danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.motion-pad {
+  display: grid;
+  width: 148px;
+  height: 148px;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+  border: 1px solid rgba(82, 100, 126, 0.32);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.motion-pad button {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.task-card {
+  min-height: 120px;
+}
+
+.task-list {
+  display: grid;
+  gap: 8px;
+  max-height: 210px;
+  overflow: auto;
+}
+
+.task-row {
+  display: grid;
+  gap: 4px;
+  border-radius: 6px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.task-row code,
+.muted {
+  color: #64748b;
+  font-size: 12px;
+}
