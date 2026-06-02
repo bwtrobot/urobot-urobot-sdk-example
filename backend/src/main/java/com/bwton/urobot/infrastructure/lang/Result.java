@@ -35,6 +35,13 @@ public class Result<T> implements Serializable {
         this.result = result;
     }
 
+    public static <T> Result<T> ok(T data) {
+        Result<T> r = new Result<>();
+        r.setSuccess(true);
+        r.setResult(data);
+        return r;
+    }
+
     public boolean isSuccess() {
         return this.success;
     }

@@ -1,0 +1,7 @@
+server:
+  port: 8080
+
+utwin:
+  access-key: ${UTWIN_ACCESS_KEY:}
+  secret-key: ${UTWIN_SECRET_KEY:}
+  endpoint: ${UTWIN_ENDPOINT:https://dev.bwton.cn/cps-dev01}
