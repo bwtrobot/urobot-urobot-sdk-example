@@ -43,7 +43,7 @@
 - Create: `frontend/src/app/App.tsx`
 - Create: `frontend/src/app/App.css`
 
-- [ ] **Step 1: Replace package metadata and scripts**
+- [x] **Step 1: Replace package metadata and scripts**
 
 Write `frontend/package.json`:
 
@@ -88,7 +88,7 @@ Write `frontend/package.json`:
 }
 ```
 
-- [ ] **Step 2: Add Vite and TypeScript configuration**
+- [x] **Step 2: Add Vite and TypeScript configuration**
 
 Write `frontend/index.html`:
 
@@ -180,7 +180,7 @@ Write `frontend/vitest.setup.ts`:
 import '@testing-library/jest-dom/vitest';
 ```
 
-- [ ] **Step 3: Add minimal app shell**
+- [x] **Step 3: Add minimal app shell**
 
 Write `frontend/src/main.tsx`:
 
@@ -249,19 +249,19 @@ textarea {
 }
 ```
 
-- [ ] **Step 4: Install dependencies**
+- [x] **Step 4: Install dependencies**
 
 Run: `npm install`
 
 Expected: `frontend/package-lock.json` is created and dependencies install without errors.
 
-- [ ] **Step 5: Verify scaffold**
+- [x] **Step 5: Verify scaffold**
 
 Run: `npm run build`
 
 Expected: TypeScript build and Vite production build pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/package.json frontend/package-lock.json frontend/index.html frontend/tsconfig.json frontend/tsconfig.node.json frontend/vite.config.ts frontend/vitest.setup.ts frontend/src/main.tsx frontend/src/app/App.tsx frontend/src/app/App.css
@@ -275,7 +275,7 @@ git commit -m "chore: scaffold frontend app"
 - Create: `frontend/src/shared/utils/pose.ts`
 - Test: `frontend/src/shared/utils/pose.test.ts`
 
-- [ ] **Step 1: Write pose utility tests**
+- [x] **Step 1: Write pose utility tests**
 
 Write `frontend/src/shared/utils/pose.test.ts`:
 
@@ -300,13 +300,13 @@ describe('pose utilities', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing pose tests**
+- [x] **Step 2: Run failing pose tests**
 
 Run: `npm run test -- src/shared/utils/pose.test.ts`
 
 Expected: FAIL because `pose.ts` does not exist.
 
-- [ ] **Step 3: Add shared API types**
+- [x] **Step 3: Add shared API types**
 
 Write `frontend/src/shared/types/api.ts`:
 
@@ -493,7 +493,7 @@ export interface TaskResult {
 }
 ```
 
-- [ ] **Step 4: Add pose utilities**
+- [x] **Step 4: Add pose utilities**
 
 Write `frontend/src/shared/utils/pose.ts`:
 
@@ -527,13 +527,13 @@ export function runtimePoseToSceneTransform(pose: RuntimePose): SceneTransform {
 }
 ```
 
-- [ ] **Step 5: Verify tests**
+- [x] **Step 5: Verify tests**
 
 Run: `npm run test -- src/shared/utils/pose.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/shared/types/api.ts frontend/src/shared/utils/pose.ts frontend/src/shared/utils/pose.test.ts
@@ -547,7 +547,7 @@ git commit -m "feat: add shared api types and pose utilities"
 - Create: `frontend/src/services/api/httpClient.ts`
 - Test: `frontend/src/services/api/httpClient.test.ts`
 
-- [ ] **Step 1: Write API fallback tests**
+- [x] **Step 1: Write API fallback tests**
 
 Write `frontend/src/services/api/httpClient.test.ts`:
 
@@ -607,13 +607,13 @@ describe('apiRequest', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing API tests**
+- [x] **Step 2: Run failing API tests**
 
 Run: `npm run test -- src/services/api/httpClient.test.ts`
 
 Expected: FAIL because `httpClient.ts` does not exist.
 
-- [ ] **Step 3: Add deterministic Mock data**
+- [x] **Step 3: Add deterministic Mock data**
 
 Write `frontend/src/services/mock/mockData.ts`:
 
@@ -740,7 +740,7 @@ export function createMockTaskResult(taskId: string): TaskResult {
 }
 ```
 
-- [ ] **Step 4: Add API client wrapper and log store**
+- [x] **Step 4: Add API client wrapper and log store**
 
 Write `frontend/src/services/api/httpClient.ts`:
 
@@ -866,13 +866,13 @@ export function clearApiLogs() {
 }
 ```
 
-- [ ] **Step 5: Verify API tests**
+- [x] **Step 5: Verify API tests**
 
 Run: `npm run test -- src/services/api/httpClient.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/services/mock/mockData.ts frontend/src/services/api/httpClient.ts frontend/src/services/api/httpClient.test.ts
@@ -886,7 +886,7 @@ git commit -m "feat: add frontend api fallback client"
 - Create: `frontend/src/services/api/mapApi.ts`
 - Test: `frontend/src/services/api/robotApi.test.ts`
 
-- [ ] **Step 1: Write robot API tests**
+- [x] **Step 1: Write robot API tests**
 
 Write `frontend/src/services/api/robotApi.test.ts`:
 
@@ -915,13 +915,13 @@ describe('buildCommandPayload', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing service tests**
+- [x] **Step 2: Run failing service tests**
 
 Run: `npm run test -- src/services/api/robotApi.test.ts`
 
 Expected: FAIL because `robotApi.ts` does not exist.
 
-- [ ] **Step 3: Add robot API service**
+- [x] **Step 3: Add robot API service**
 
 Write `frontend/src/services/api/robotApi.ts`:
 
@@ -1026,7 +1026,7 @@ export async function getTaskResults(robotId: string, taskIds: string[]) {
 }
 ```
 
-- [ ] **Step 4: Add map API service**
+- [x] **Step 4: Add map API service**
 
 Write `frontend/src/services/api/mapApi.ts`:
 
@@ -1106,13 +1106,13 @@ export async function listTopologyPaths(editionId: string) {
 }
 ```
 
-- [ ] **Step 5: Verify service tests**
+- [x] **Step 5: Verify service tests**
 
 Run: `npm run test -- src/services/api/robotApi.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/services/api/robotApi.ts frontend/src/services/api/mapApi.ts frontend/src/services/api/robotApi.test.ts
@@ -1129,7 +1129,7 @@ git commit -m "feat: add robot and map api services"
 - Create: `frontend/src/features/spatial-viewer/components/spatial-viewer.css`
 - Test: `frontend/src/features/spatial-viewer/components/LayerDropdown.test.tsx`
 
-- [ ] **Step 1: Write layer dropdown tests**
+- [x] **Step 1: Write layer dropdown tests**
 
 Write `frontend/src/features/spatial-viewer/components/LayerDropdown.test.tsx`:
 
@@ -1159,13 +1159,13 @@ describe('LayerDropdown', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing dropdown tests**
+- [x] **Step 2: Run failing dropdown tests**
 
 Run: `npm run test -- src/features/spatial-viewer/components/LayerDropdown.test.tsx`
 
 Expected: FAIL because components do not exist.
 
-- [ ] **Step 3: Add spatial scene adapter**
+- [x] **Step 3: Add spatial scene adapter**
 
 Write `frontend/src/features/spatial-viewer/lib/spatialScene.ts`:
 
@@ -1360,7 +1360,7 @@ export function createSpatialScene(): SpatialSceneAdapter {
 }
 ```
 
-- [ ] **Step 4: Add layer and render dropdown components**
+- [x] **Step 4: Add layer and render dropdown components**
 
 Write `frontend/src/features/spatial-viewer/components/LayerDropdown.tsx`:
 
@@ -1482,7 +1482,7 @@ export function RenderDropdown({ value, onChange }: RenderDropdownProps) {
 }
 ```
 
-- [ ] **Step 5: Add SpatialViewer component and styles**
+- [x] **Step 5: Add SpatialViewer component and styles**
 
 Write `frontend/src/features/spatial-viewer/components/SpatialViewer.tsx`:
 
@@ -1688,13 +1688,13 @@ Write `frontend/src/features/spatial-viewer/components/spatial-viewer.css`:
 }
 ```
 
-- [ ] **Step 6: Verify dropdown tests**
+- [x] **Step 6: Verify dropdown tests**
 
 Run: `npm run test -- src/features/spatial-viewer/components/LayerDropdown.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/features/spatial-viewer
