@@ -39,7 +39,6 @@ export function LayerDropdown({ layers, onChange }: LayerDropdownProps) {
         type="button"
         className="spatial-toolbar-button"
         aria-expanded={open}
-        aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
       >
         <Layers size={16} aria-hidden="true" />
@@ -47,7 +46,7 @@ export function LayerDropdown({ layers, onChange }: LayerDropdownProps) {
       </button>
 
       {open ? (
-        <div className="spatial-dropdown-panel" role="menu">
+        <div className="spatial-dropdown-panel">
           {layerRows.map((row) => {
             const visible = layers[row.key];
             const Icon = visible ? Eye : EyeOff;
@@ -57,8 +56,7 @@ export function LayerDropdown({ layers, onChange }: LayerDropdownProps) {
                 key={row.key}
                 type="button"
                 className="spatial-menu-row"
-                role="menuitemcheckbox"
-                aria-checked={visible}
+                aria-pressed={visible}
                 onClick={() => toggleLayer(row.key)}
               >
                 <span>{row.label}</span>

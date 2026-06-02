@@ -19,13 +19,13 @@ describe('LayerDropdown', () => {
 
     await user.click(screen.getByRole('button', { name: '图层' }));
 
-    expect(screen.getByRole('menuitemcheckbox', { name: /BIM 模型/ })).toBeChecked();
-    expect(screen.getByRole('menuitemcheckbox', { name: /全局点云/ })).toBeChecked();
-    expect(screen.getByRole('menuitemcheckbox', { name: /地面点云/ })).toBeChecked();
-    expect(screen.getByRole('menuitemcheckbox', { name: /导航点 \/ 路径/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: /BIM 模型/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /全局点云/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /地面点云/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /导航点 \/ 路径/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getAllByLabelText('可见')).toHaveLength(4);
 
-    await user.click(screen.getByRole('menuitemcheckbox', { name: /地面点云/ }));
+    await user.click(screen.getByRole('button', { name: /地面点云/ }));
 
     expect(onChange).toHaveBeenCalledWith({
       ...visibleLayers,
@@ -45,7 +45,7 @@ describe('LayerDropdown', () => {
 
     await user.click(screen.getByRole('button', { name: '图层' }));
 
-    expect(screen.getByRole('menuitemcheckbox', { name: /BIM 模型/ })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /BIM 模型/ })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByLabelText('隐藏')).toBeInTheDocument();
   });
 });
