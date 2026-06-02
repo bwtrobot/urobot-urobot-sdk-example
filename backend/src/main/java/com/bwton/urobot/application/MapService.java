@@ -6,6 +6,7 @@ import com.bwton.utwin.opensdk.services.UTwinClient;
 import com.bwton.utwin.opensdk.services.map.model.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,7 +25,7 @@ public class MapService {
                     .mapId(mapId).build();
             List<MapEdition> editions = uTwinClient.map().listEditions(req).data();
             return editions.stream().map(this::editionToMap).collect(Collectors.toList());
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<List<Map<String, Object>>> getEdition(String editionId) {
@@ -33,7 +34,7 @@ public class MapService {
                     .editionId(editionId).build();
             MapEdition edition = uTwinClient.map().getEdition(req).edition();
             return Collections.singletonList(editionToMap(edition));
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<List<Map<String, Object>>> getChargingStations(String editionId) {
@@ -42,7 +43,7 @@ public class MapService {
                     .editionId(editionId).build();
             List<MapPoint> points = uTwinClient.map().getChargingStations(req).data();
             return points.stream().map(this::pointToMap).collect(Collectors.toList());
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<Page<Map<String, Object>>> listNavPaths(String editionId, PageQuery query) {
@@ -67,7 +68,7 @@ public class MapService {
             page.setPageSize(resp.pageSize());
             page.setTotalPage((int) Math.ceil((double) resp.total() / resp.pageSize()));
             return page;
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<Page<Map<String, Object>>> listTopoPaths(String editionId, PageQuery query) {
@@ -92,7 +93,7 @@ public class MapService {
             page.setPageSize(resp.pageSize());
             page.setTotalPage((int) Math.ceil((double) resp.total() / resp.pageSize()));
             return page;
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     private Map<String, Object> editionToMap(MapEdition e) {

@@ -8,6 +8,7 @@ import com.bwton.utwin.opensdk.services.UTwinClient;
 import com.bwton.utwin.opensdk.services.robot.model.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,7 +42,7 @@ public class RobotService {
             page.setTotalCount(Math.toIntExact(response.total()));
             page.setTotalPage((int) Math.ceil((double) response.total() / response.pageSize()));
             return page;
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<Map<String, Object>> getRobotRuntime(String robotId) {
@@ -50,7 +51,7 @@ public class RobotService {
                     .robotId(robotId)
                     .build();
             return uTwinClient.robot().getRobotRuntime(request).runtime();
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<String> sendCommand(String robotId, SendCommandBody body) {
@@ -63,7 +64,7 @@ public class RobotService {
                     .callbackUrl(body.getCallbackUrl())
                     .build();
             return uTwinClient.robot().sendCommand(request).taskId();
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<List<Map<String, Object>>> getTaskResult(String robotId, List<String> taskIds) {
@@ -74,7 +75,7 @@ public class RobotService {
                     .build();
             List<TaskReply> replies = uTwinClient.robot().getTaskResult(request).data();
             return replies.stream().map(this::taskReplyToMap).collect(Collectors.toList());
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     private Map<String, Object> taskReplyToMap(TaskReply reply) {
