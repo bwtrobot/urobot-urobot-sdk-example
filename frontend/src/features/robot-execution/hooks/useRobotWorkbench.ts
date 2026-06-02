@@ -10,6 +10,9 @@ import {
 } from '../../../services/api/robotApi';
 import type { MapEdition, NavigationPath, RobotRuntime, RobotSummary, TaskResult, TopologyPath } from '../../../shared/types/api';
 
+// 任务终态集合，轮询到这些状态时停止
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'timeout', '完成', '失败', '已取消', '超时']);
+
 export interface WorkbenchTask {
   taskId: string;
   commandCode: RobotCommandCode;
@@ -69,9 +72,18 @@ export function useRobotWorkbench() {
     };
   }, [selectedRobotId]);
 
+  // 从 version_path 中解析 editionId，格式: {mapId}/maincenter/{editionId}
+  const runtimeEditionId = useMemo(() => {
+    const versionPath = runtime?.version_path;
+    if (!versionPath) return undefined;
+    const parts = versionPath.split('/');
+    return parts.length >= 3 ? parts[parts.length - 1] : undefined;
+  }, [runtime]);
+
   useEffect(() => {
     const mapId = selectedRobot?.map?.id;
-    const editionId = selectedRobot?.map?.edition_id ?? selectedRobot?.map?.editionId;
+    // 优先使用 robot 列表中的 editionId，其次从 runtime 的 version_path 解析
+    const editionId = selectedRobot?.map?.edition_id ?? selectedRobot?.map?.editionId ?? runtimeEditionId;
     if (!mapId && !editionId) return;
     let cancelled = false;
 
@@ -104,27 +116,41 @@ export function useRobotWorkbench() {
     return () => {
       cancelled = true;
     };
-  }, [selectedRobot]);
+  }, [selectedRobot, runtimeEditionId]);
 
   const sendCommand = useCallback(
     async (commandCode: RobotCommandCode, commandParam: unknown) => {
       if (!selectedRobotId) return;
       const payload = buildCommandPayload(commandCode, commandParam);
-      const response = await sendRobotCommand(selectedRobotId, payload);
-      const taskId = response.data;
-      setDemoMode((current) => current || response.source === 'mock');
-      setTasks((current) => [
-        { taskId, commandCode, source: response.source, status: response.source === 'mock' ? '演示执行中' : '已下发' },
-        ...current,
-      ]);
-      const taskResponse = await getTaskResults(selectedRobotId, [taskId]);
-      setTasks((current) =>
-        current.map((task) =>
-          task.taskId === taskId
-            ? { ...task, status: taskResponse.data[0]?.task_status ?? task.status, result: taskResponse.data[0] }
-            : task,
-        ),
-      );
+
+      try {
+        const response = await sendRobotCommand(selectedRobotId, payload);
+        const taskId = response.data;
+        setDemoMode((current) => current || response.source === 'mock');
+        setTasks((current) => [
+          { taskId, commandCode, source: response.source, status: response.source === 'mock' ? '演示执行中' : '已下发' },
+          ...current,
+        ]);
+
+        // 轮询监控任务最终状态
+        const maxPolls = 30;
+        const pollInterval = 2000;
+        for (let i = 0; i < maxPolls; i++) {
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          const taskResponse = await getTaskResults(selectedRobotId, [taskId]);
+          const latestStatus = taskResponse.data[0]?.task_status ?? '';
+          setTasks((current) =>
+            current.map((task) =>
+              task.taskId === taskId
+                ? { ...task, status: latestStatus || task.status, result: taskResponse.data[0] }
+                : task,
+            ),
+          );
+          if (TERMINAL_STATUSES.has(latestStatus)) break;
+        }
+      } catch (error) {
+        console.error('发送命令失败', error);
+      }
     },
     [selectedRobotId],
   );

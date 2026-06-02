@@ -77,6 +77,8 @@ export interface RobotRuntime {
   used_memory?: number;
   cpu_temperature?: number;
   net_ip_address?: string;
+  version_path?: string;
+  package_path?: string;
 }
 
 export interface MapBimInfo {
