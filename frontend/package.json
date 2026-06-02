@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@soonspacejs/plugin-cps-soonmanager": "^2.15.8",
     "axios": "^1.7.9",
     "camera-controls": "^3.1.2",
     "lucide-react": "^0.468.0",
