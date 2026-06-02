@@ -109,7 +109,7 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     // 并行加载 BIM 和点云
     await Promise.all([
       this.loadBim(edition),
-      this.loadPointCloud(edition.globalMap, 0xff0000, this.groups.globalPointCloud),
+      this.loadPointCloud(edition.globalMap, 0x00ff00, this.groups.globalPointCloud),
       this.loadPointCloud(edition.groundMap, 0x0000ff, this.groups.groundPointCloud),
     ]);
 
