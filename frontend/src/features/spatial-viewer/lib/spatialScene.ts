@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import SoonSpace from 'soonspacejs';
+import CpsSoonmanagerPlugin from '@soonspacejs/plugin-cps-soonmanager';
+import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js';
 import type {
   MapEdition,
   NavigationPath,
@@ -6,13 +9,12 @@ import type {
   TopologyPath,
   Vector3Value,
 } from '../../../shared/types/api';
-import { runtimePoseToSceneTransform } from '../../../shared/utils/pose';
+import {
+  robotToThreeMatrix,
+  rosPositionToThree,
+  rosQuaternionToThree,
+} from '../../../shared/utils/pose';
 import type { LayerVisibility } from '../components/LayerDropdown';
-
-type SoonSpaceIntegrationPoint = {
-  loadBimModel?: (url: string) => Promise<THREE.Object3D>;
-  loadPointCloud?: (url: string) => Promise<THREE.Points>;
-};
 
 export interface RenderSettings {
   pointSize: 'small' | 'medium' | 'large';
@@ -22,7 +24,7 @@ export interface RenderSettings {
 
 export interface SpatialSceneAdapter {
   mount(container: HTMLDivElement): void;
-  loadEdition(edition: MapEdition | null): void;
+  loadEdition(edition: MapEdition | null): Promise<void>;
   updateRobotRuntime(runtime: RobotRuntime | null): void;
   setNavigationData(navPaths: NavigationPath[], topoPaths: TopologyPath[]): void;
   setLayerVisibility(layers: LayerVisibility): void;
@@ -42,20 +44,17 @@ const opacityValues: Record<RenderSettings['opacity'], number> = {
   solid: 1,
 };
 
-class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
-  // SoonSpaceJS model/PCD loaders will plug in here once real assets are available.
-  private readonly soonspaceLoaders: SoonSpaceIntegrationPoint | null = null;
-  private container: HTMLDivElement | null = null;
-  private scene: THREE.Scene | null = null;
-  private camera: THREE.PerspectiveCamera | null = null;
-  private renderer: THREE.WebGLRenderer | null = null;
-  private frameId: number | null = null;
-  private resizeObserver: ResizeObserver | null = null;
+const pcdLoader = new PCDLoader();
+
+class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
+  private ssp: SoonSpace | null = null;
+  private cpsPlugin: CpsSoonmanagerPlugin | null = null;
   private renderSettings: RenderSettings = {
     pointSize: 'medium',
     opacity: 'solid',
     bimWireframe: false,
   };
+
   private readonly groups = {
     helpers: new THREE.Group(),
     bim: new THREE.Group(),
@@ -67,77 +66,67 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
 
   mount(container: HTMLDivElement) {
     this.dispose();
-    this.container = container;
 
-    const width = Math.max(container.clientWidth, 1);
-    const height = Math.max(container.clientHeight, 1);
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 2000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const ssp = new SoonSpace({
+      el: container,
+      options: {
+        showInfo: false,
+        showGrid: false,
+        background: {
+          color: 0xf6f8fb,
+        },
+      },
+    });
 
-    scene.background = new THREE.Color(0xf6f8fb);
-    camera.position.set(8, 8, 8);
-    camera.lookAt(0, 0, 0);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(width, height);
-    container.appendChild(renderer.domElement);
+    // 灯光
+    ssp.createAmbientLight({ id: 'ambient', intensity: 0.7, color: 0xffffff });
+    ssp.createDirectionalLight({
+      id: 'directional',
+      intensity: 0.75,
+      color: 0xffffff,
+      position: { x: 8, y: 12, z: 6 },
+    });
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.75);
-    directionalLight.position.set(8, 12, 6);
-    scene.add(directionalLight);
+    // 网格辅助线
     this.groups.helpers.add(new THREE.GridHelper(20, 20, 0xc6d0dc, 0xe0e6ee));
 
+    // 将所有分组添加到 SoonSpace 的 Three.js 场景
+    const scene = ssp.viewport.scene;
     Object.values(this.groups).forEach((group) => scene.add(group));
     this.buildRobotMesh();
     scene.add(this.robot);
 
-    this.scene = scene;
-    this.camera = camera;
-    this.renderer = renderer;
-    this.resizeObserver = new ResizeObserver(() => this.resize());
-    this.resizeObserver.observe(container);
-    this.animate();
+    this.ssp = ssp;
   }
 
-  loadEdition(edition: MapEdition | null) {
+  async loadEdition(edition: MapEdition | null) {
     this.clearGroup(this.groups.bim);
     this.clearGroup(this.groups.globalPointCloud);
     this.clearGroup(this.groups.groundPointCloud);
 
-    if (!edition) {
-      return;
-    }
+    if (!edition) return;
 
-    this.groups.bim.add(this.createBimPlaceholder(edition));
-    this.groups.globalPointCloud.add(
-      this.createPointCloudPlaceholder(0x2f80ed, -1.6, edition.globalMap),
-    );
-    this.groups.groundPointCloud.add(
-      this.createPointCloudPlaceholder(0x18a058, 1.6, edition.groundMap),
-    );
+    // 并行加载 BIM 和点云
+    await Promise.all([
+      this.loadBim(edition),
+      this.loadPointCloud(edition.globalMap, 0xff0000, this.groups.globalPointCloud),
+      this.loadPointCloud(edition.groundMap, 0x0000ff, this.groups.groundPointCloud),
+    ]);
+
     this.applyRenderSettings();
   }
 
   updateRobotRuntime(runtime: RobotRuntime | null) {
     const pose = runtime?.ros_odom?.pose;
     this.robot.visible = Boolean(pose);
+    if (!pose) return;
 
-    if (!pose) {
-      return;
-    }
+    // ROS 坐标 → Three.js 坐标
+    const threePos = rosPositionToThree(pose.position);
+    this.robot.position.copy(threePos);
 
-    const transform = runtimePoseToSceneTransform(pose);
-    this.robot.position.set(
-      transform.position.x,
-      transform.position.y,
-      transform.position.z,
-    );
-    this.robot.rotation.set(
-      transform.rotation.x,
-      transform.rotation.y,
-      transform.rotation.z,
-    );
+    const threeQuat = rosQuaternionToThree(pose.orientation);
+    this.robot.quaternion.copy(threeQuat);
   }
 
   setNavigationData(navPaths: NavigationPath[], topoPaths: TopologyPath[]) {
@@ -148,9 +137,7 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
         path.nodes.map((node) => node.position),
         0xf97316,
       );
-      if (line) {
-        this.groups.paths.add(line);
-      }
+      if (line) this.groups.paths.add(line);
     });
 
     topoPaths.forEach((path) => {
@@ -158,14 +145,10 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
       path.edges.forEach((edge) => {
         const start = nodeById.get(edge.snode);
         const end = nodeById.get(edge.enode);
-        if (!start || !end) {
-          return;
-        }
+        if (!start || !end) return;
 
         const line = this.createLineFromPositions([start, end], 0x6366f1);
-        if (line) {
-          this.groups.paths.add(line);
-        }
+        if (line) this.groups.paths.add(line);
       });
     });
   }
@@ -182,83 +165,65 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
     this.applyRenderSettings();
   }
 
-  private applyRenderSettings() {
-    const settings = this.renderSettings;
-    const pointSize = pointSizes[settings.pointSize];
-    const opacity = opacityValues[settings.opacity];
-
-    [this.groups.globalPointCloud, this.groups.groundPointCloud].forEach((group) => {
-      group.traverse((object) => {
-        if (object instanceof THREE.Points) {
-          const material = object.material as THREE.PointsMaterial;
-          material.size = pointSize;
-          material.opacity = opacity;
-          material.transparent = opacity < 1;
-          material.needsUpdate = true;
-        }
-      });
-    });
-
-    this.groups.bim.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        const material = object.material as THREE.MeshStandardMaterial;
-        material.wireframe = settings.bimWireframe;
-        material.opacity = opacity;
-        material.transparent = opacity < 1;
-        material.needsUpdate = true;
-      }
-    });
-  }
-
   dispose() {
-    if (this.frameId !== null) {
-      cancelAnimationFrame(this.frameId);
-      this.frameId = null;
-    }
-
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = null;
-
     Object.values(this.groups).forEach((group) => this.clearGroup(group));
     this.clearGroup(this.robot);
 
-    if (this.scene) {
-      Object.values(this.groups).forEach((group) => this.scene?.remove(group));
-      this.scene.remove(this.robot);
-      this.scene.clear();
+    // 销毁 SoonSpace 实例（内部清理 scene、renderer、controls）
+    if (this.ssp) {
+      this.ssp.dispose();
+      this.ssp = null;
     }
-
-    if (this.renderer) {
-      this.renderer.dispose();
-      this.renderer.domElement.remove();
-    }
-
-    this.scene = null;
-    this.camera = null;
-    this.renderer = null;
-    this.container = null;
+    this.cpsPlugin = null;
   }
 
-  private resize() {
-    if (!this.container || !this.camera || !this.renderer) {
-      return;
+  // ── BIM 加载 ──
+
+  private async loadBim(edition: MapEdition) {
+    if (!edition.bim || !this.ssp) return;
+
+    // 注册 CPS 插件并加载 BIM 场景
+    const cpsPlugin = this.ssp.registerPlugin(CpsSoonmanagerPlugin, 'cps');
+    this.cpsPlugin = cpsPlugin;
+
+    cpsPlugin.setPath(edition.bim.fileUrl);
+    await cpsPlugin.loadScene();
+
+    // CPS 插件加载的模型通过 sceneGroup 访问，移入 bim 分组统一管理图层可见性
+    if (cpsPlugin.sceneGroup) {
+      const sceneObj = cpsPlugin.sceneGroup as unknown as THREE.Object3D;
+      sceneObj.parent?.remove(sceneObj);
+      this.groups.bim.add(sceneObj);
     }
 
-    const width = Math.max(this.container.clientWidth, 1);
-    const height = Math.max(this.container.clientHeight, 1);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
+    // 应用 BIM 变换参数（已是 Three.js 坐标系，直接应用）
+    const bim = edition.bim;
+    this.groups.bim.position.set(bim.position.x, bim.position.y, bim.position.z);
+    this.groups.bim.scale.set(bim.scale.x, bim.scale.y, bim.scale.z);
+    this.groups.bim.quaternion.set(
+      bim.orientation.x,
+      bim.orientation.y,
+      bim.orientation.z,
+      bim.orientation.w,
+    );
   }
 
-  private animate = () => {
-    if (!this.scene || !this.camera || !this.renderer) {
-      return;
-    }
+  // ── 点云加载 ──
 
-    this.renderer.render(this.scene, this.camera);
-    this.frameId = requestAnimationFrame(this.animate);
-  };
+  private async loadPointCloud(url: string | undefined, color: number, group: THREE.Group) {
+    if (!url) return;
+
+    const points = await pcdLoader.loadAsync(url);
+    const material = points.material as THREE.PointsMaterial;
+    material.color.set(color);
+    material.size = pointSizes[this.renderSettings.pointSize];
+
+    // ROS 坐标系 → Three.js 坐标系
+    points.applyMatrix4(robotToThreeMatrix);
+    group.add(points);
+  }
+
+  // ── 机器人 mesh ──
 
   private buildRobotMesh() {
     this.clearGroup(this.robot);
@@ -280,85 +245,60 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
     this.robot.visible = false;
   }
 
-  private createBimPlaceholder(edition: MapEdition) {
-    const group = new THREE.Group();
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x94a3b8,
-      opacity: 0.78,
-      transparent: true,
-      roughness: 0.65,
-    });
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(5, 0.12, 3), material);
-    const core = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 1), material.clone());
-    core.position.y = 0.86;
-    group.add(slab, core);
-
-    if (edition.bim) {
-      const transform = runtimePoseToSceneTransform({
-        position: edition.bim.position,
-        orientation: edition.bim.orientation,
-      });
-      group.position.set(
-        transform.position.x,
-        transform.position.y,
-        transform.position.z,
-      );
-      group.rotation.set(
-        transform.rotation.x,
-        transform.rotation.y,
-        transform.rotation.z,
-      );
-      group.scale.set(
-        edition.bim.scale.x,
-        edition.bim.scale.z,
-        edition.bim.scale.y,
-      );
-    }
-
-    return group;
-  }
-
-  private createPointCloudPlaceholder(color: number, offsetX: number, source?: string) {
-    const count = source ? 260 : 90;
-    const positions = new Float32Array(count * 3);
-
-    for (let index = 0; index < count; index += 1) {
-      const column = index % 26;
-      const row = Math.floor(index / 26);
-      positions[index * 3] = offsetX + (column - 13) * 0.14;
-      positions[index * 3 + 1] = ((index * 17) % 9) * 0.02;
-      positions[index * 3 + 2] = (row - 5) * 0.28;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    return new THREE.Points(
-      geometry,
-      new THREE.PointsMaterial({
-        color,
-        size: pointSizes.medium,
-        opacity: opacityValues.medium,
-        transparent: true,
-      }),
-    );
-  }
+  // ── 路径渲染 ──
 
   private createLineFromPositions(positions: Vector3Value[], color: number) {
-    if (positions.length < 2) {
-      return null;
-    }
+    if (positions.length < 2) return null;
 
-    const points = positions.map(
-      (position) => new THREE.Vector3(position.x, position.z + 0.03, position.y),
-    );
+    // ROS 坐标 → Three.js 坐标，+0.03 Y 偏移避免 Z-fighting
+    const points = positions.map((p) => {
+      const v = rosPositionToThree(p);
+      v.y += 0.03;
+      return v;
+    });
+
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
-
     return new THREE.Line(
       geometry,
       new THREE.LineBasicMaterial({ color, linewidth: 2 }),
     );
   }
+
+  // ── 渲染设置 ──
+
+  private applyRenderSettings() {
+    const settings = this.renderSettings;
+    const pointSize = pointSizes[settings.pointSize];
+    const opacity = opacityValues[settings.opacity];
+
+    [this.groups.globalPointCloud, this.groups.groundPointCloud].forEach((group) => {
+      group.traverse((object) => {
+        if (object instanceof THREE.Points) {
+          const material = object.material as THREE.PointsMaterial;
+          material.size = pointSize;
+          material.opacity = opacity;
+          material.transparent = opacity < 1;
+          material.needsUpdate = true;
+        }
+      });
+    });
+
+    this.groups.bim.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        materials.forEach((mat: THREE.Material) => {
+          if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshBasicMaterial) {
+            mat.wireframe = settings.bimWireframe;
+            mat.opacity = opacity;
+            mat.transparent = opacity < 1;
+            mat.needsUpdate = true;
+          }
+        });
+      }
+    });
+  }
+
+  // ── 工具方法 ──
 
   private clearGroup(group: THREE.Group) {
     group.children.slice().forEach((child) => {
@@ -369,34 +309,15 @@ class ThreeSpatialSceneAdapter implements SpatialSceneAdapter {
 
   private disposeObject(object: THREE.Object3D) {
     object.traverse((child) => {
-      if (child instanceof THREE.Mesh || child instanceof THREE.Points) {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Points || child instanceof THREE.Line) {
         child.geometry.dispose();
-        this.disposeMaterial(child.material);
-      }
-
-      if (child instanceof THREE.Line) {
-        child.geometry.dispose();
-        this.disposeMaterial(child.material);
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((m) => m?.dispose());
       }
     });
-  }
-
-  private disposeMaterial(
-    material: THREE.Material | THREE.Material[] | undefined,
-  ) {
-    if (!material) {
-      return;
-    }
-
-    if (Array.isArray(material)) {
-      material.forEach((entry) => entry.dispose());
-      return;
-    }
-
-    material.dispose();
   }
 }
 
 export function createSpatialScene(): SpatialSceneAdapter {
-  return new ThreeSpatialSceneAdapter();
+  return new SoonSpaceSceneAdapter();
 }

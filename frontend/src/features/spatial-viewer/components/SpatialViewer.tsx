@@ -67,7 +67,7 @@ export function SpatialViewer({
 
   useEffect(() => {
     if (!viewerReady) return;
-    adapterRef.current.loadEdition(edition);
+    void adapterRef.current.loadEdition(edition);
   }, [edition, viewerReady]);
 
   useEffect(() => {
