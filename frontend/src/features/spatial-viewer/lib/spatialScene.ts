@@ -5,6 +5,8 @@ import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js';
 import type {
   MapEdition,
   NavigationPath,
+  PathNode,
+  QuaternionValue,
   RobotRuntime,
   TopologyPath,
   Vector3Value,
@@ -13,6 +15,8 @@ import {
   robotToThreeMatrix,
   rosPositionToThree,
   rosQuaternionToThree,
+  threePositionToRos,
+  threeQuaternionToRos,
 } from '../../../shared/utils/pose';
 import type { LayerVisibility } from '../components/LayerDropdown';
 
@@ -22,13 +26,25 @@ export interface RenderSettings {
   bimWireframe: boolean;
 }
 
+export interface ActivePathData {
+  type: 'nav' | 'topo';
+  path: NavigationPath | TopologyPath;
+  selectedNodeIds: Set<string>;
+}
+
 export interface SpatialSceneAdapter {
   mount(container: HTMLDivElement): void;
   loadEdition(edition: MapEdition | null): Promise<void>;
   updateRobotRuntime(runtime: RobotRuntime | null): void;
   setNavigationData(navPaths: NavigationPath[], topoPaths: TopologyPath[]): void;
+  setActivePathData(data: ActivePathData | null): void;
   setLayerVisibility(layers: LayerVisibility): void;
   setRenderSettings(settings: RenderSettings): void;
+  // 位姿标定
+  enterPoseCalibration(): void;
+  exitPoseCalibration(): void;
+  confirmCalibration(): { position: Vector3Value; orientation: QuaternionValue } | null;
+  onPoseConfirmed(cb: (pose: { position: Vector3Value; orientation: QuaternionValue }) => void): () => void;
   dispose(): void;
 }
 
@@ -130,31 +146,63 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
   }
 
   setNavigationData(navPaths: NavigationPath[], topoPaths: TopologyPath[]) {
+    // 保留旧接口兼容，但不再使用——由 setActivePathData 替代
     this.clearGroup(this.groups.paths);
+  }
 
-    navPaths.forEach((path) => {
+  setActivePathData(data: ActivePathData | null) {
+    this.clearGroup(this.groups.paths);
+    if (!data) return;
+
+    const { type, path, selectedNodeIds } = data;
+    const coordinateFrame = path.coordinateFrame ?? 'ROBOT';
+
+    // 渲染路径线条
+    if (type === 'nav') {
       const line = this.createLineFromPositions(
-        path.nodes.map((node) => node.position),
+        path.nodes.map((n) => n.position),
         0xf97316,
-        path.coordinateFrame,
+        coordinateFrame,
       );
       if (line) this.groups.paths.add(line);
-    });
-
-    topoPaths.forEach((path) => {
-      const nodeById = new Map(path.nodes.map((node) => [node.id, node.position]));
-      path.edges.forEach((edge) => {
+    } else {
+      const topoPath = path as TopologyPath;
+      const nodeById = new Map(topoPath.nodes.map((n) => [n.id, n.position]));
+      topoPath.edges.forEach((edge) => {
         const start = nodeById.get(edge.snode);
         const end = nodeById.get(edge.enode);
         if (!start || !end) return;
-
-        const line = this.createLineFromPositions(
-          [start, end],
-          0x6366f1,
-          path.coordinateFrame,
-        );
+        const line = this.createLineFromPositions([start, end], 0x6366f1, coordinateFrame);
         if (line) this.groups.paths.add(line);
       });
+    }
+
+    // 渲染节点圆球和名称标签
+    path.nodes.forEach((node) => {
+      const isSelected = selectedNodeIds.has(node.id);
+      const radius = isSelected ? 0.15 : 0.1;
+      const color = isSelected ? 0xfbbf24 : 0x94a3b8;
+
+      // 计算节点在 Three.js 坐标系中的位置
+      const pos = coordinateFrame === 'THREE'
+        ? new THREE.Vector3(node.position.x, node.position.y, node.position.z)
+        : rosPositionToThree(node.position);
+
+      // 圆球标记
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 16, 16),
+        new THREE.MeshStandardMaterial({ color }),
+      );
+      sphere.position.copy(pos);
+      this.groups.paths.add(sphere);
+
+      // 名称文字标签（Canvas Sprite）
+      if (node.name) {
+        const sprite = this.createTextSprite(node.name);
+        sprite.position.copy(pos);
+        sprite.position.y += 0.25;
+        this.groups.paths.add(sprite);
+      }
     });
   }
 
@@ -307,6 +355,212 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
         });
       }
     });
+  }
+
+  // ── 文字标签 ──
+
+  private createTextSprite(text: string): THREE.Sprite {
+    const scale = Math.min(window.devicePixelRatio, 2) * 2;
+    const fontSize = 14 * scale;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    const metrics = ctx.measureText(text);
+    const padding = 4 * scale;
+    canvas.width = metrics.width + padding * 2;
+    canvas.height = fontSize + padding * 2;
+
+    // 重设 font（canvas 尺寸变更后会重置）
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = '#1e293b';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, padding, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+    const sprite = new THREE.Sprite(material);
+    // 保持文字大小适中
+    sprite.scale.set(canvas.width / canvas.height * 0.3, 0.3, 1);
+    return sprite;
+  }
+
+  // ── 位姿标定 ──
+
+  private calibrationState: {
+    active: boolean;
+    groundPlane: THREE.Mesh | null;
+    marker: THREE.Mesh | null;
+    arrow: THREE.ArrowHelper | null;
+    confirmCallback: ((pose: { position: Vector3Value; orientation: QuaternionValue }) => void) | null;
+    mouseDownHandler: ((e: MouseEvent) => void) | null;
+    mouseMoveHandler: ((e: MouseEvent) => void) | null;
+    mouseUpHandler: ((e: MouseEvent) => void) | null;
+    isDragging: boolean;
+    markerPosition: THREE.Vector3 | null;
+  } = {
+    active: false,
+    groundPlane: null,
+    marker: null,
+    arrow: null,
+    confirmCallback: null,
+    mouseDownHandler: null,
+    mouseMoveHandler: null,
+    mouseUpHandler: null,
+    isDragging: false,
+    markerPosition: null,
+  };
+
+  enterPoseCalibration() {
+    if (!this.ssp || this.calibrationState.active) return;
+    this.calibrationState.active = true;
+
+    // 禁用相机控制器，防止标定拖拽被相机控制拦截
+    this.ssp.controls.enabled = false;
+
+    // 创建不可见地面平面作为 Raycaster 拾取目标
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(200, 200),
+      new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
+    );
+    ground.rotation.x = -Math.PI / 2; // 水平放置
+    this.ssp.viewport.scene.add(ground);
+    this.calibrationState.groundPlane = ground;
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const renderer = this.ssp.viewport.renderer;
+    const camera = this.ssp.viewport.camera;
+
+    // 获取 canvas 元素
+    const canvas = renderer.domElement;
+
+    // 鼠标按下：放置/移动标记位置
+    this.calibrationState.mouseDownHandler = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(ground);
+      if (intersects.length === 0) return;
+
+      const point = intersects[0].point;
+      this.calibrationState.markerPosition = point.clone();
+
+      // 放置或移动绿色圆球标记
+      if (!this.calibrationState.marker) {
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.15, 24, 24),
+          new THREE.MeshStandardMaterial({ color: 0x22c55e }),
+        );
+        marker.position.copy(point);
+        this.ssp!.viewport.scene.add(marker);
+        this.calibrationState.marker = marker;
+
+        // 创建红色朝向箭头
+        const arrow = new THREE.ArrowHelper(
+          new THREE.Vector3(0, 0, -1), point, 1.0, 0xef4444, 0.2, 0.1,
+        );
+        this.ssp!.viewport.scene.add(arrow);
+        this.calibrationState.arrow = arrow;
+      } else {
+        this.calibrationState.marker.position.copy(point);
+        this.calibrationState.arrow!.position.copy(point);
+      }
+
+      this.calibrationState.isDragging = true;
+    };
+
+    // 鼠标移动：拖拽设定朝向
+    this.calibrationState.mouseMoveHandler = (e: MouseEvent) => {
+      if (!this.calibrationState.isDragging || !this.calibrationState.arrow || !this.calibrationState.markerPosition) return;
+
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(ground);
+      if (intersects.length === 0) return;
+
+      // 计算从标记位置到鼠标位置的方向
+      const target = intersects[0].point;
+      const dir = new THREE.Vector3().subVectors(target, this.calibrationState.markerPosition).normalize();
+      if (dir.length() > 0.01) {
+        this.calibrationState.arrow.setDirection(dir);
+      }
+    };
+
+    // 鼠标抬起：结束拖拽
+    this.calibrationState.mouseUpHandler = () => {
+      this.calibrationState.isDragging = false;
+    };
+
+    canvas.addEventListener('mousedown', this.calibrationState.mouseDownHandler);
+    canvas.addEventListener('mousemove', this.calibrationState.mouseMoveHandler);
+    canvas.addEventListener('mouseup', this.calibrationState.mouseUpHandler);
+  }
+
+  exitPoseCalibration() {
+    if (!this.ssp) return;
+    const state = this.calibrationState;
+
+    // 恢复相机控制器
+    this.ssp.controls.enabled = true;
+
+    // 清理事件监听
+    const canvas = this.ssp.viewport.renderer.domElement;
+    if (state.mouseDownHandler) canvas.removeEventListener('mousedown', state.mouseDownHandler);
+    if (state.mouseMoveHandler) canvas.removeEventListener('mousemove', state.mouseMoveHandler);
+    if (state.mouseUpHandler) canvas.removeEventListener('mouseup', state.mouseUpHandler);
+
+    // 清理 3D 对象
+    if (state.groundPlane) {
+      this.ssp.viewport.scene.remove(state.groundPlane);
+      state.groundPlane.geometry.dispose();
+      (state.groundPlane.material as THREE.Material).dispose();
+    }
+    if (state.marker) {
+      this.ssp.viewport.scene.remove(state.marker);
+      state.marker.geometry.dispose();
+      (state.marker.material as THREE.Material).dispose();
+    }
+    if (state.arrow) {
+      this.ssp.viewport.scene.remove(state.arrow);
+    }
+
+    // 重置状态
+    this.calibrationState = {
+      active: false, groundPlane: null, marker: null, arrow: null,
+      confirmCallback: null, mouseDownHandler: null, mouseMoveHandler: null,
+      mouseUpHandler: null, isDragging: false, markerPosition: null,
+    };
+  }
+
+  onPoseConfirmed(cb: (pose: { position: Vector3Value; orientation: QuaternionValue }) => void): () => void {
+    this.calibrationState.confirmCallback = cb;
+    return () => { this.calibrationState.confirmCallback = null; };
+  }
+
+  /** 外部调用确认标定，返回当前标记的 ROS 坐标位姿 */
+  confirmCalibration(): { position: Vector3Value; orientation: QuaternionValue } | null {
+    const { marker, arrow, confirmCallback } = this.calibrationState;
+    if (!marker || !arrow) return null;
+
+    // 将 Three.js 位置转换为 ROS 坐标
+    const position = threePositionToRos(marker.position);
+
+    // 从箭头方向计算四元数：箭头方向在 XZ 平面，转为绕 Y 轴的旋转
+    const dir = arrow.getWorldDirection(new THREE.Vector3());
+    const yaw = Math.atan2(dir.x, dir.z);
+    const threeQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    const orientation = threeQuaternionToRos(threeQuat);
+
+    const pose = { position, orientation };
+    if (confirmCallback) confirmCallback(pose);
+    return pose;
   }
 
   // ── 工具方法 ──

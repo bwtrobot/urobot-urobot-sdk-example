@@ -159,3 +159,103 @@
   word-break: break-all;
   white-space: normal;
 }
+
+/* 路径类型 Radio */
+.path-type-radio {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.path-type-radio label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0;
+  cursor: pointer;
+}
+
+/* 节点复选框列表 */
+.node-checklist {
+  margin-top: 10px;
+}
+
+.node-checklist-header {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.node-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.node-list li label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.node-list li label:hover {
+  background: #f1f5f9;
+}
+
+.node-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-coord {
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 导航按钮 */
+.nav-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 10px;
+  border: 1px solid #0ea5e9;
+  border-radius: 8px;
+  background: #0ea5e9;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.nav-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 标定提示 */
+.calibration-hint {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 12px;
+  text-align: center;
+}

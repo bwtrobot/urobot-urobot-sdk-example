@@ -1,11 +1,17 @@
 package com.bwton.urobot.interfaces.api;
 
 import com.bwton.urobot.application.RobotService;
+import com.bwton.urobot.infrastructure.lang.Page;
+import com.bwton.urobot.infrastructure.lang.PageQuery;
 import com.bwton.urobot.infrastructure.lang.Result;
 import com.bwton.urobot.interfaces.request.SendCommandBody;
+import com.bwton.urobot.interfaces.response.RobotResponse;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -16,6 +22,11 @@ public class RobotHandler {
 
     public RobotHandler(RobotService service) {
         this.service = service;
+    }
+
+    @GetMapping("page")
+    public Mono<Result<Page<RobotResponse>>> page(@ModelAttribute PageQuery pageQuery) {
+        return service.page(pageQuery).map(Result::ok);
     }
 
     @GetMapping("runtime/{robotId}")
@@ -29,12 +40,18 @@ public class RobotHandler {
         return service.sendCommand(robotId, body).map(Result::ok);
     }
 
+    // 支持 taskIds[0]=xxx&taskIds[1]=yyy indexed 数组格式
     @GetMapping("task-result/{robotId}")
     public Mono<Result<List<Map<String, Object>>>> taskResult(
             @PathVariable String robotId,
-            @RequestParam(value = "task_ids", required = false) List<String> taskIds,
-            @RequestParam(value = "taskIds", required = false) List<String> legacyTaskIds) {
-        List<String> resolvedTaskIds = taskIds != null ? taskIds : legacyTaskIds;
-        return service.getTaskResult(robotId, resolvedTaskIds).map(Result::ok);
+            ServerHttpRequest request) {
+        MultiValueMap<String, String> queryParams = request.getQueryParams();
+        List<String> taskIds = new ArrayList<>();
+        queryParams.forEach((key, values) -> {
+            if (key.startsWith("taskIds")) {
+                taskIds.addAll(values);
+            }
+        });
+        return service.getTaskResult(robotId, taskIds).map(Result::ok);
     }
 }

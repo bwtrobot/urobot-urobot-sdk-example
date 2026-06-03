@@ -20,7 +20,8 @@ export type RobotCommandCode =
   | 'robot_pause'
   | 'emergency_stop'
   | 'base_move'
-  | 'cmd_vel';
+  | 'cmd_vel'
+  | 'pose_init';
 
 const commandTypeByCode: Record<RobotCommandCode, number> = {
   navigation: 0,
@@ -31,6 +32,7 @@ const commandTypeByCode: Record<RobotCommandCode, number> = {
   emergency_stop: 20,
   base_move: 23,
   cmd_vel: 23,
+  pose_init: 24,
 };
 
 function createStandardUuid() {
@@ -114,7 +116,7 @@ export async function getRobotRuntime(robotId: string): Promise<ApiRequestResult
 
   return {
     ...runtime,
-      data: normalized,
+    data: normalized,
   };
 }
 
@@ -129,9 +131,38 @@ export async function sendRobotCommand(robotId: string, payload: RobotCommand) {
   });
 }
 
+// 每批最多查询的 taskId 数量，避免 GET URL 超长
+const TASK_IDS_BATCH_SIZE = 10;
+
 export async function getTaskResults(robotId: string, taskIds: string[]) {
+  if (taskIds.length === 0) {
+    return { data: [] as TaskResult[], source: 'real' as const };
+  }
+
+  // taskIds 数量较少时直接查询，超出批次上限时分批并发查询后合并结果
+  if (taskIds.length <= TASK_IDS_BATCH_SIZE) {
+    return fetchTaskResultsBatch(robotId, taskIds);
+  }
+
+  const batches: string[][] = [];
+  for (let i = 0; i < taskIds.length; i += TASK_IDS_BATCH_SIZE) {
+    batches.push(taskIds.slice(i, i + TASK_IDS_BATCH_SIZE));
+  }
+
+  const results = await Promise.all(
+    batches.map((batch) => fetchTaskResultsBatch(robotId, batch)),
+  );
+
+  return {
+    data: results.flatMap((r) => r.data),
+    source: results.some((r) => r.source === 'mock') ? 'mock' as const : 'real' as const,
+  };
+}
+
+function fetchTaskResultsBatch(robotId: string, taskIds: string[]) {
+  // Spring indexed 数组格式: taskIds[0]=xxx&taskIds[1]=yyy
   const params = new URLSearchParams();
-  taskIds.forEach((taskId) => params.append('task_ids', taskId));
+  taskIds.forEach((taskId, index) => params.append(`taskIds[${index}]`, taskId));
 
   return apiRequest<TaskResult[]>({
     method: 'GET',

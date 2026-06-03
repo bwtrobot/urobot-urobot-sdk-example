@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getChargingPoints, getMapEdition, getMapEditions, listNavigationPaths, listTopologyPaths } from '../../../services/api/mapApi';
+import { threePositionToRos, threeQuaternionToRos } from '../../../shared/utils/pose';
 import {
   buildCommandPayload,
   getRobotRuntime,
@@ -8,7 +9,7 @@ import {
   sendRobotCommand,
   type RobotCommandCode,
 } from '../../../services/api/robotApi';
-import type { MapEdition, NavigationPath, RobotRuntime, RobotSummary, TaskResult, TopologyPath } from '../../../shared/types/api';
+import type { MapEdition, NavigationPath, PathNode, RobotRuntime, RobotSummary, TaskResult, TopologyPath } from '../../../shared/types/api';
 
 // 任务终态集合，轮询到这些状态时停止
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'timeout', '完成', '失败', '已取消', '超时']);
@@ -21,6 +22,8 @@ export interface WorkbenchTask {
   result?: TaskResult;
 }
 
+export type ActivePathType = 'nav' | 'topo';
+
 export function useRobotWorkbench() {
   const [robots, setRobots] = useState<RobotSummary[]>([]);
   const [selectedRobotId, setSelectedRobotId] = useState<string>('');
@@ -31,6 +34,12 @@ export function useRobotWorkbench() {
   const [tasks, setTasks] = useState<WorkbenchTask[]>([]);
   const [demoMode, setDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+
+  // 路径互斥选择状态
+  const [activePathType, setActivePathType] = useState<ActivePathType>('nav');
+  const [selectedPathId, setSelectedPathId] = useState<string>('');
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +127,40 @@ export function useRobotWorkbench() {
     };
   }, [selectedRobot, runtimeEditionId]);
 
+  // 当路径数据加载完成后，自动选中第一条路径
+  useEffect(() => {
+    const paths = activePathType === 'nav' ? navPaths : topoPaths;
+    if (paths.length > 0 && !paths.find((p) => p.id === selectedPathId)) {
+      setSelectedPathId(paths[0].id);
+      setSelectedNodeIds(new Set());
+    }
+  }, [activePathType, navPaths, topoPaths, selectedPathId]);
+
+  // 切换路径类型时重置选中状态
+  const handlePathTypeChange = useCallback((type: ActivePathType) => {
+    setActivePathType(type);
+    setSelectedPathId('');
+    setSelectedNodeIds(new Set());
+  }, []);
+
+  // 当前路径类型下的路径列表
+  const currentPaths = useMemo(
+    () => (activePathType === 'nav' ? navPaths : topoPaths),
+    [activePathType, navPaths, topoPaths],
+  );
+
+  // 当前选中路径
+  const activePath = useMemo(
+    () => currentPaths.find((p) => p.id === selectedPathId),
+    [currentPaths, selectedPathId],
+  );
+
+  // 当前路径的节点列表
+  const activeNodes: PathNode[] = useMemo(
+    () => activePath?.nodes ?? [],
+    [activePath],
+  );
+
   // 跟踪活跃的任务轮询，在机器人切换或组件卸载时取消
   const pollingAbortRef = useRef<AbortController | null>(null);
 
@@ -139,7 +182,8 @@ export function useRobotWorkbench() {
       if (!selectedRobotId) return;
       const payload = buildCommandPayload(commandCode, commandParam);
 
-      // 每次发送命令创建新的取消控制器
+      // 取消前一个任务的轮询，避免并发轮询
+      pollingAbortRef.current?.abort();
       const abortController = new AbortController();
       pollingAbortRef.current = abortController;
 
@@ -180,6 +224,50 @@ export function useRobotWorkbench() {
     [selectedRobotId],
   );
 
+  // 根据选中节点构造并下发导航指令
+  const navigateToSelected = useCallback(() => {
+    if (selectedNodeIds.size === 0 || !activePath) return;
+
+    const coordinateFrame = activePath.coordinateFrame ?? 'ROBOT';
+    const selectedNodes = activeNodes
+      .filter((n) => selectedNodeIds.has(n.id))
+      .sort((a, b) => a.order - b.order);
+
+    // 根据 coordinateFrame 转换坐标到 ROS 坐标系
+    function toRosPosition(node: PathNode) {
+      if (coordinateFrame === 'THREE') {
+        return threePositionToRos(node.position);
+      }
+      return node.position;
+    }
+
+    function toRosOrientation(node: PathNode) {
+      if (coordinateFrame === 'THREE' && node.orientation) {
+        return threeQuaternionToRos(node.orientation);
+      }
+      return node.orientation ?? { x: 0, y: 0, z: 0, w: 1 };
+    }
+
+    if (selectedNodes.length === 1) {
+      // 单点导航
+      const node = selectedNodes[0];
+      void sendCommand('navigation', {
+        point_name: node.name || node.id,
+        position: toRosPosition(node),
+        orientation: toRosOrientation(node),
+        look_at: true,
+      });
+    } else {
+      // 多点导航
+      const points = selectedNodes.map((node) => ({
+        position: toRosPosition(node),
+        orientation: toRosOrientation(node),
+        look_at: true,
+      }));
+      void sendCommand('topology_navigation', { point: points });
+    }
+  }, [selectedNodeIds, activePath, activeNodes, sendCommand]);
+
   return {
     robots,
     selectedRobot,
@@ -193,5 +281,19 @@ export function useRobotWorkbench() {
     demoMode,
     loading,
     sendCommand,
+    // 路径互斥选择
+    activePathType,
+    handlePathTypeChange,
+    selectedPathId,
+    setSelectedPathId,
+    selectedNodeIds,
+    setSelectedNodeIds,
+    currentPaths,
+    activePath,
+    activeNodes,
+    navigateToSelected,
+    // 位姿标定
+    isCalibrating,
+    setIsCalibrating,
   };
 }

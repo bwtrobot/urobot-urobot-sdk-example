@@ -34,3 +34,24 @@ export function rosQuaternionToThree(q: QuaternionValue): THREE.Quaternion {
     .multiply(rosQuat)
     .multiply(basisQuatInv);
 }
+
+/**
+ * Three.js 位置坐标转 ROS 位置坐标（rosPositionToThree 的逆运算）
+ * Three.js(x, y, z) → ROS(x, -z, y)
+ */
+export function threePositionToRos(p: { x: number; y: number; z: number }): Vector3Value {
+  return { x: p.x, y: -p.z, z: p.y };
+}
+
+/**
+ * Three.js 四元数转 ROS 四元数（rosQuaternionToThree 的逆运算）
+ * 使用逆相似变换: q_ros = R^(-1) * q_three * R
+ */
+export function threeQuaternionToRos(q: { x: number; y: number; z: number; w: number }): QuaternionValue {
+  const threeQuat = new THREE.Quaternion(q.x, q.y, q.z, q.w);
+  const rosQuat = new THREE.Quaternion()
+    .copy(basisQuatInv)
+    .multiply(threeQuat)
+    .multiply(basisQuat);
+  return { x: rosQuat.x, y: rosQuat.y, z: rosQuat.z, w: rosQuat.w };
+}

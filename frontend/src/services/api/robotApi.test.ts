@@ -246,7 +246,7 @@ describe('robotApi', () => {
       }),
     );
     const callConfig = (http.defaults.adapter as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(callConfig.params.toString()).toBe('task_ids=task-1&task_ids=task-2');
+    expect(callConfig.params.toString()).toBe('taskIds%5B0%5D=task-1&taskIds%5B1%5D=task-2');
     expect(real).toEqual({
       data: [{ task_id: 'task-1', task_status: 'running' }],
       source: 'real',

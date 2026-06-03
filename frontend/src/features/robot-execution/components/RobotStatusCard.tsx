@@ -24,7 +24,7 @@ export function RobotStatusCard({ robot, runtime, demoMode }: RobotStatusCardPro
         </div>
         <div>
           <dt>电量</dt>
-          <dd>{power ?? '-'}%</dd>
+          <dd>{power != null ? `${power}%` : '-'}</dd>
         </div>
         <div>
           <dt>模式</dt>

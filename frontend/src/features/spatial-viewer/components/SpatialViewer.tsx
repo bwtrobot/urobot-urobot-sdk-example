@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, forwardRef, type ReactNode } from 'react';
 import type {
   MapEdition,
   NavigationPath,
   RobotRuntime,
   TopologyPath,
 } from '../../../shared/types/api';
-import { createSpatialScene, type RenderSettings } from '../lib/spatialScene';
+import { createSpatialScene, type ActivePathData, type RenderSettings, type SpatialSceneAdapter } from '../lib/spatialScene';
+
+export interface SpatialViewerHandle {
+  getAdapter(): SpatialSceneAdapter;
+}
 import { LayerDropdown, type LayerVisibility } from './LayerDropdown';
 import { RenderDropdown } from './RenderDropdown';
 import './spatial-viewer.css';
@@ -15,6 +19,7 @@ interface SpatialViewerProps {
   runtime: RobotRuntime | null;
   navPaths: NavigationPath[];
   topoPaths: TopologyPath[];
+  activePathData?: ActivePathData | null;
   layers: LayerVisibility;
   renderSettings: RenderSettings;
   onLayersChange: (layers: LayerVisibility) => void;
@@ -23,20 +28,25 @@ interface SpatialViewerProps {
   debugDrawer?: ReactNode;
 }
 
-export function SpatialViewer({
+export const SpatialViewer = forwardRef<SpatialViewerHandle, SpatialViewerProps>(function SpatialViewer({
   edition,
   runtime,
   navPaths,
   topoPaths,
+  activePathData,
   layers,
   renderSettings,
   onLayersChange,
   onRenderSettingsChange,
   motionPad,
   debugDrawer,
-}: SpatialViewerProps) {
+}, ref) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const adapterRef = useRef(createSpatialScene());
+
+  useImperativeHandle(ref, () => ({
+    getAdapter: () => adapterRef.current,
+  }));
   const [viewerError, setViewerError] = useState<string | null>(null);
   const [viewerReady, setViewerReady] = useState(false);
 
@@ -77,8 +87,13 @@ export function SpatialViewer({
 
   useEffect(() => {
     if (!viewerReady) return;
-    adapterRef.current.setNavigationData(navPaths, topoPaths);
-  }, [navPaths, topoPaths, viewerReady]);
+    // 优先使用互斥路径数据，否则回退旧接口
+    if (activePathData !== undefined) {
+      adapterRef.current.setActivePathData(activePathData ?? null);
+    } else {
+      adapterRef.current.setNavigationData(navPaths, topoPaths);
+    }
+  }, [navPaths, topoPaths, activePathData, viewerReady]);
 
   useEffect(() => {
     if (!viewerReady) return;
@@ -111,4 +126,4 @@ export function SpatialViewer({
       {debugDrawer ? <div className="spatial-debug-slot">{debugDrawer}</div> : null}
     </section>
   );
-}
+});

@@ -1,13 +1,24 @@
-import { BatteryCharging, Megaphone, Navigation, OctagonAlert, Pause, Play } from 'lucide-react';
+import { Crosshair, Megaphone, Navigation, OctagonAlert, Pause, Play } from 'lucide-react';
 import type { RobotCommandCode } from '../../../services/api/robotApi';
 import './robot-execution.css';
 
 interface CommandPanelProps {
   robotName?: string;
+  isCalibrating?: boolean;
   onCommand: (commandCode: RobotCommandCode, commandParam: unknown) => void;
+  onStartCalibration?: () => void;
+  onCancelCalibration?: () => void;
+  onConfirmCalibration?: () => void;
 }
 
-export function CommandPanel({ robotName, onCommand }: CommandPanelProps) {
+export function CommandPanel({
+  robotName,
+  isCalibrating,
+  onCommand,
+  onStartCalibration,
+  onCancelCalibration,
+  onConfirmCalibration,
+}: CommandPanelProps) {
   return (
     <section className="side-card">
       <h2>快捷指令</h2>
@@ -20,14 +31,23 @@ export function CommandPanel({ robotName, onCommand }: CommandPanelProps) {
           <Megaphone size={16} />
           语音
         </button>
-        <button
-          type="button"
-          disabled={!robotName}
-          onClick={() => onCommand('charge_manager', { action: 'charge_start', robot_name: robotName })}
-        >
-          <BatteryCharging size={16} />
-          充电
-        </button>
+        {/* 位姿标定按钮（替代原充电按钮） */}
+        {isCalibrating ? (
+          <>
+            <button type="button" onClick={onConfirmCalibration}>
+              <Crosshair size={16} />
+              确认标定
+            </button>
+            <button type="button" onClick={onCancelCalibration}>
+              取消
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={onStartCalibration}>
+            <Crosshair size={16} />
+            位姿标定
+          </button>
+        )}
         <button type="button" onClick={() => onCommand('robot_pause', true)}>
           <Pause size={16} />
           暂停
@@ -41,6 +61,11 @@ export function CommandPanel({ robotName, onCommand }: CommandPanelProps) {
           急停
         </button>
       </div>
+      {isCalibrating && (
+        <div className="calibration-hint">
+          点击地面设置位置，拖拽设置朝向
+        </div>
+      )}
     </section>
   );
 }
