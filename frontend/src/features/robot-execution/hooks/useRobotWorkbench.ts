@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getChargingPoints, getMapEdition, getMapEditions, listNavigationPaths, listTopologyPaths } from '../../../services/api/mapApi';
 import {
   buildCommandPayload,
@@ -118,10 +118,30 @@ export function useRobotWorkbench() {
     };
   }, [selectedRobot, runtimeEditionId]);
 
+  // 跟踪活跃的任务轮询，在机器人切换或组件卸载时取消
+  const pollingAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      // 组件卸载时取消所有进行中的轮询
+      pollingAbortRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    // 切换机器人时取消上一个机器人的轮询
+    pollingAbortRef.current?.abort();
+    pollingAbortRef.current = null;
+  }, [selectedRobotId]);
+
   const sendCommand = useCallback(
     async (commandCode: RobotCommandCode, commandParam: unknown) => {
       if (!selectedRobotId) return;
       const payload = buildCommandPayload(commandCode, commandParam);
+
+      // 每次发送命令创建新的取消控制器
+      const abortController = new AbortController();
+      pollingAbortRef.current = abortController;
 
       try {
         const response = await sendRobotCommand(selectedRobotId, payload);
@@ -132,12 +152,15 @@ export function useRobotWorkbench() {
           ...current,
         ]);
 
-        // 轮询监控任务最终状态
+        // 轮询监控任务最终状态，支持取消
         const maxPolls = 30;
         const pollInterval = 2000;
         for (let i = 0; i < maxPolls; i++) {
+          if (abortController.signal.aborted) break;
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          if (abortController.signal.aborted) break;
           const taskResponse = await getTaskResults(selectedRobotId, [taskId]);
+          if (abortController.signal.aborted) break;
           const latestStatus = taskResponse.data[0]?.task_status ?? '';
           setTasks((current) =>
             current.map((task) =>
@@ -149,7 +172,9 @@ export function useRobotWorkbench() {
           if (TERMINAL_STATUSES.has(latestStatus)) break;
         }
       } catch (error) {
-        console.error('发送命令失败', error);
+        if (!abortController.signal.aborted) {
+          console.error('发送命令失败', error);
+        }
       }
     },
     [selectedRobotId],

@@ -22,8 +22,6 @@ export type RobotCommandCode =
   | 'base_move'
   | 'cmd_vel';
 
-let idCounter = 0;
-
 const commandTypeByCode: Record<RobotCommandCode, number> = {
   navigation: 0,
   topology_navigation: 22,
@@ -35,9 +33,16 @@ const commandTypeByCode: Record<RobotCommandCode, number> = {
   cmd_vel: 23,
 };
 
-function createUniqueId(prefix: string) {
-  idCounter += 1;
-  return `${prefix}-${Date.now()}-${idCounter}-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
+function createStandardUuid() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
 }
 
 function buildPageResult<T>(rows: T[]): PageResult<T> {
@@ -62,8 +67,8 @@ export function buildCommandPayload(
   commandCode: RobotCommandCode,
   commandParam: unknown,
 ): RobotCommand {
-  const taskId = createUniqueId('task');
-  const commandId = createUniqueId('command');
+  const taskId = createStandardUuid();
+  const commandId = createStandardUuid();
 
   return {
     type: commandTypeByCode[commandCode],
@@ -114,7 +119,7 @@ export async function getRobotRuntime(robotId: string): Promise<ApiRequestResult
 }
 
 export async function sendRobotCommand(robotId: string, payload: RobotCommand) {
-  const taskId = payload.params.task_id ?? createUniqueId('mock-task');
+  const taskId = payload.params.task_id ?? createStandardUuid();
 
   return apiRequest<string>({
     method: 'POST',

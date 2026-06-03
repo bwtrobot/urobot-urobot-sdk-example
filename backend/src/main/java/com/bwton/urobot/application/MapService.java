@@ -55,7 +55,8 @@ public class MapService {
                     .build();
             ListNavPathsResponse resp = uTwinClient.map().navPath().list(req);
 
-            List<String> ids = resp.data().parallelStream().map(item -> {
+            // 顺序调用 SDK 获取路径 ID，避免 parallelStream 占用 ForkJoinPool 公共线程池
+            List<String> ids = resp.data().stream().map(item -> {
                 GetNavPathByUuidResponse edition = uTwinClient.map().navPath().getByUuid(
                         GetNavPathByUuidRequest.builder()
                                 .uuid(item.uuid())
@@ -91,7 +92,8 @@ public class MapService {
                     .build();
             ListTopoPathsResponse resp = uTwinClient.map().topoPath().list(req);
 
-            List<String> ids = resp.data().parallelStream().map(item -> {
+            // 顺序调用 SDK 获取路径 ID，避免 parallelStream 占用 ForkJoinPool 公共线程池
+            List<String> ids = resp.data().stream().map(item -> {
                 GetTopoPathByUuidResponse edition = uTwinClient.map().topoPath().getByUuid(
                         GetTopoPathByUuidRequest.builder()
                                 .uuid(item.uuid())

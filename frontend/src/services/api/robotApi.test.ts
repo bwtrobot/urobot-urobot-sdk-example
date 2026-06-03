@@ -19,6 +19,7 @@ import { mockRuntime } from '../mock/mockData';
 
 describe('robotApi', () => {
   const originalAdapter = http.defaults.adapter;
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   afterEach(() => {
     http.defaults.adapter = originalAdapter;
@@ -26,7 +27,7 @@ describe('robotApi', () => {
     vi.restoreAllMocks();
   });
 
-  it('builds robot command payloads with unique task and command identifiers', () => {
+  it('builds robot command payloads with unique standard UUID task and command identifiers', () => {
     const first = buildCommandPayload('navigation', { target: 'point-a' });
     const second = buildCommandPayload('cmd_vel', { linear: 0.5 });
 
@@ -43,11 +44,11 @@ describe('robotApi', () => {
         ],
       },
     });
-    expect(first.params.task_id).toEqual(expect.any(String));
-    expect(first.params.task_command_info[0].command_id).toEqual(expect.any(String));
-    expect(second.params.task_id).toEqual(expect.any(String));
+    expect(first.params.task_id).toMatch(uuidPattern);
+    expect(first.params.task_command_info[0].command_id).toMatch(uuidPattern);
+    expect(second.params.task_id).toMatch(uuidPattern);
     expect(second.type).toBe(23);
-    expect(second.params.task_command_info[0].command_id).toEqual(expect.any(String));
+    expect(second.params.task_command_info[0].command_id).toMatch(uuidPattern);
     expect(second.params.task_id).not.toBe(first.params.task_id);
     expect(second.params.task_command_info[0].command_id).not.toBe(
       first.params.task_command_info[0].command_id,
