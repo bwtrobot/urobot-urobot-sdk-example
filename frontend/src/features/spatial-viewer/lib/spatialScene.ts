@@ -239,7 +239,7 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
   // ── BIM 加载 ──
 
   private async loadBim(edition: MapEdition) {
-    if (!edition.bim || !this.ssp) return;
+    if (!edition.bim?.fileUrl || !this.ssp) return;
 
     // 注册 CPS 插件并加载 BIM 场景
     const cpsPlugin = this.ssp.registerPlugin(CpsSoonmanagerPlugin, 'cps');

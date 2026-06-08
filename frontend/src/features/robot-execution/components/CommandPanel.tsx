@@ -1,4 +1,4 @@
-import { Crosshair, Megaphone, Navigation, OctagonAlert, Pause, Play } from 'lucide-react';
+import { Crosshair, Navigation, OctagonAlert, Pause, Play } from 'lucide-react';
 import type { RobotCommandCode } from '../../../services/api/robotApi';
 import './robot-execution.css';
 
@@ -27,10 +27,19 @@ export function CommandPanel({
           <Navigation size={16} />
           导航
         </button>
-        <button type="button" onClick={() => onCommand('robot_tts', { text: '欢迎使用 uRobot SDK' })}>
-          <Megaphone size={16} />
-          语音
-        </button>
+        <select
+          disabled={!robotName}
+          defaultValue=""
+          onChange={(e) => {
+            if (!e.target.value) return;
+            onCommand('base_move', { key: e.target.value });
+            e.target.value = '';
+          }}
+        >
+          <option value="" disabled>姿态控制</option>
+          <option value="lie_down">卧倒</option>
+          <option value="stand_up">站立</option>
+        </select>
         {/* 位姿标定按钮（替代原充电按钮） */}
         {isCalibrating ? (
           <>
