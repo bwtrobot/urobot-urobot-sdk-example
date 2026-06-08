@@ -37,30 +37,39 @@ export function SpatialWorkbenchPage() {
   const [layers, setLayers] = useState(defaultLayers);
   const [renderSettings, setRenderSettings] = useState(defaultRenderSettings);
 
-  // 位姿标定回调
-  function handleStartCalibration() {
+  // 进入场景交互模式（位姿标定 / 单点导航共用同一套点云选点交互）
+  function enterSceneInteraction(mode: 'calibrating' | 'nav-picking') {
     viewerRef.current?.getAdapter().enterPoseCalibration();
-    workbench.setIsCalibrating(true);
+    workbench.setInteractionMode(mode);
   }
 
-  function handleCancelCalibration() {
+  function cancelSceneInteraction() {
     viewerRef.current?.getAdapter().exitPoseCalibration();
-    workbench.setIsCalibrating(false);
+    workbench.setInteractionMode('idle');
   }
 
-  function handleConfirmCalibration() {
+  // 确认交互：根据当前模式下发不同命令
+  function confirmSceneInteraction() {
     const adapter = viewerRef.current?.getAdapter();
     if (!adapter) return;
-    // 调用 confirmCalibration 获取标定位姿并下发 pose_init 指令
     const pose = adapter.confirmCalibration();
     if (pose) {
-      void workbench.sendCommand('pose_init', {
-        position: pose.position,
-        orientation: pose.orientation,
-      });
+      if (workbench.interactionMode === 'calibrating') {
+        // 位姿标定 → pose_init
+        void workbench.sendCommand('pose_init', {
+          position: pose.position,
+          orientation: pose.orientation,
+        });
+      } else {
+        // 单点导航 → navigation（与参考项目一致，仅传 position + orientation）
+        void workbench.sendCommand('navigation', {
+          position: pose.position,
+          orientation: pose.orientation,
+        });
+      }
     }
     adapter.exitPoseCalibration();
-    workbench.setIsCalibrating(false);
+    workbench.setInteractionMode('idle');
   }
 
   function handleMove(direction: MoveDirection) {
@@ -100,6 +109,7 @@ export function SpatialWorkbenchPage() {
         <SpatialViewer
           ref={viewerRef}
           edition={workbench.edition ?? null}
+          robot={workbench.selectedRobot ?? null}
           runtime={workbench.runtime ?? null}
           navPaths={workbench.navPaths}
           topoPaths={workbench.topoPaths}
@@ -127,11 +137,12 @@ export function SpatialWorkbenchPage() {
           />
           <CommandPanel
             robotName={workbench.selectedRobot?.name}
-            isCalibrating={workbench.isCalibrating}
+            interactionMode={workbench.interactionMode}
             onCommand={(commandCode, commandParam) => void workbench.sendCommand(commandCode, commandParam)}
-            onStartCalibration={handleStartCalibration}
-            onCancelCalibration={handleCancelCalibration}
-            onConfirmCalibration={handleConfirmCalibration}
+            onStartCalibration={() => enterSceneInteraction('calibrating')}
+            onStartNavPick={() => enterSceneInteraction('nav-picking')}
+            onConfirmInteraction={confirmSceneInteraction}
+            onCancelInteraction={cancelSceneInteraction}
           />
           <TaskTimeline tasks={workbench.tasks} />
         </aside>

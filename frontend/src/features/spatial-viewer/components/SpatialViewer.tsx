@@ -3,6 +3,7 @@ import type {
   MapEdition,
   NavigationPath,
   RobotRuntime,
+  RobotSummary,
   TopologyPath,
 } from '../../../shared/types/api';
 import { createSpatialScene, type ActivePathData, type RenderSettings, type SpatialSceneAdapter } from '../lib/spatialScene';
@@ -16,6 +17,7 @@ import './spatial-viewer.css';
 
 interface SpatialViewerProps {
   edition: MapEdition | null;
+  robot: RobotSummary | null;
   runtime: RobotRuntime | null;
   navPaths: NavigationPath[];
   topoPaths: TopologyPath[];
@@ -30,6 +32,7 @@ interface SpatialViewerProps {
 
 export const SpatialViewer = forwardRef<SpatialViewerHandle, SpatialViewerProps>(function SpatialViewer({
   edition,
+  robot,
   runtime,
   navPaths,
   topoPaths,
@@ -79,6 +82,11 @@ export const SpatialViewer = forwardRef<SpatialViewerHandle, SpatialViewerProps>
     if (!viewerReady) return;
     void adapterRef.current.loadEdition(edition);
   }, [edition, viewerReady]);
+
+  useEffect(() => {
+    if (!viewerReady) return;
+    adapterRef.current.loadRobotModel(robot);
+  }, [robot, viewerReady]);
 
   useEffect(() => {
     if (!viewerReady) return;

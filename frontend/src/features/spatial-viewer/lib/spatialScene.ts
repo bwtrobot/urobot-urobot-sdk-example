@@ -2,12 +2,17 @@ import * as THREE from 'three';
 import SoonSpace from 'soonspacejs';
 import CpsSoonmanagerPlugin from '@soonspacejs/plugin-cps-soonmanager';
 import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js';
+import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import URDFLoader from 'urdf-loader';
 import type {
   MapEdition,
   NavigationPath,
   PathNode,
   QuaternionValue,
   RobotRuntime,
+  RobotSummary,
   TopologyPath,
   Vector3Value,
 } from '../../../shared/types/api';
@@ -35,6 +40,7 @@ export interface ActivePathData {
 export interface SpatialSceneAdapter {
   mount(container: HTMLDivElement): void;
   loadEdition(edition: MapEdition | null): Promise<void>;
+  loadRobotModel(robot: RobotSummary | null): void;
   updateRobotRuntime(runtime: RobotRuntime | null): void;
   setNavigationData(navPaths: NavigationPath[], topoPaths: TopologyPath[]): void;
   setActivePathData(data: ActivePathData | null): void;
@@ -65,6 +71,7 @@ const pcdLoader = new PCDLoader();
 class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
   private ssp: SoonSpace | null = null;
   private cpsPlugin: CpsSoonmanagerPlugin | null = null;
+  private container: HTMLDivElement | null = null;
   private renderSettings: RenderSettings = {
     pointSize: 'medium',
     opacity: 'solid',
@@ -83,11 +90,15 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     globalPointCloud: new THREE.Group(),
     groundPointCloud: new THREE.Group(),
     paths: new THREE.Group(),
+    calibration: new THREE.Group(),
   };
   private readonly robot = new THREE.Group();
+  // 当前已加载的机型标识，避免重复加载
+  private loadedTerminalType: number | null = null;
 
   mount(container: HTMLDivElement) {
     this.dispose();
+    this.container = container;
 
     const ssp = new SoonSpace({
       el: container,
@@ -115,7 +126,7 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     // 将所有分组添加到 SoonSpace 的 Three.js 场景
     const scene = ssp.viewport.scene;
     Object.values(this.groups).forEach((group) => scene.add(group));
-    this.buildRobotMesh();
+    this.buildFallbackRobotMesh();
     scene.add(this.robot);
 
     this.ssp = ssp;
@@ -284,7 +295,8 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
 
   // ── 机器人 mesh ──
 
-  private buildRobotMesh() {
+  /** 构建默认的简易机器人 Mesh（无 URDF 时使用） */
+  private buildFallbackRobotMesh() {
     this.clearGroup(this.robot);
 
     const body = new THREE.Mesh(
@@ -302,6 +314,107 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
 
     this.robot.add(body, heading);
     this.robot.visible = false;
+  }
+
+  /**
+   * 根据机器人的 terminal_type_value 判定机型并加载对应 URDF 模型
+   * CANINE（四足）类型 → b2_description（机器狗）
+   * HUMAN（人形）类型 → g1_description（23 自由度人形）
+   * 其他/未知 → 保留默认简易 Mesh
+   */
+  loadRobotModel(robot: RobotSummary | null) {
+    const terminalValue = robot?.terminalTypeValue ?? robot?.terminal_type_value;
+    // 同一机型不重复加载
+    if (terminalValue === this.loadedTerminalType) return;
+    this.loadedTerminalType = terminalValue ?? null;
+
+    // 无法识别机型时使用默认 Mesh
+    if (terminalValue == null) {
+      this.buildFallbackRobotMesh();
+      return;
+    }
+
+    // 判定机型分类：CANINE 前缀 = 四足，HUMAN 前缀 = 人形
+    const urdfConfig = this.resolveUrdfConfig(terminalValue);
+    if (!urdfConfig) {
+      this.buildFallbackRobotMesh();
+      return;
+    }
+
+    // 异步加载 URDF 模型
+    const loader = new URDFLoader();
+    loader.loadMeshCb = this.createUrdfMeshLoader();
+    loader.packages = () => urdfConfig.packagePath;
+    loader.loadAsync(urdfConfig.urdfUrl).then((urdfRobot) => {
+      // 确保加载完成时机型未切换
+      if (this.loadedTerminalType !== terminalValue) return;
+      this.clearGroup(this.robot);
+      // URDF 坐标系为 Z-up（ROS），Three.js/SoonSpace 为 Y-up，需绕 X 轴旋转 -90°
+      urdfRobot.rotation.x = -Math.PI / 2;
+      // 统一材质为金属质感
+      urdfRobot.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.material = new THREE.MeshStandardMaterial({
+            color: (child.material as THREE.MeshStandardMaterial).color ?? new THREE.Color(0x888888),
+            metalness: 0.7,
+            roughness: 0.5,
+          });
+        }
+      });
+      this.robot.add(urdfRobot);
+      this.robot.visible = false;
+      this.ssp?.render();
+    }).catch((err) => {
+      console.warn('[URDF] 加载失败，使用默认模型', err);
+      if (this.loadedTerminalType === terminalValue) {
+        this.buildFallbackRobotMesh();
+      }
+    });
+  }
+
+  /**
+   * 根据 terminal_type_value 解析 URDF 文件路径
+   * 值定义参考后端 TerminalTypeEnums
+   */
+  private resolveUrdfConfig(terminalValue: number): { packagePath: string; urdfUrl: string } | null {
+    // HUMAN 人形: 1=G1-23, 4=G1-29, 7=H2, 8=PM01
+    const humanTypes = new Set([1, 4, 7, 8]);
+    // CANINE 四足: 0=Go2, 2=B2, 3=X30, 5=B2-W, 6=Go2-W, 9=A2, 10=Q25, 11=A2-W
+    const canineTypes = new Set([0, 2, 3, 5, 6, 9, 10, 11]);
+
+    if (humanTypes.has(terminalValue)) {
+      // 人形统一使用 g1_23dof URDF（项目中可用的人形模型）
+      const urdfFile = terminalValue === 4 ? 'g1_29dof.urdf' : 'g1_23dof.urdf';
+      return {
+        packagePath: '/urdf/g1_description/',
+        urdfUrl: `/urdf/g1_description/${urdfFile}`,
+      };
+    }
+    if (canineTypes.has(terminalValue)) {
+      // 四足统一使用 b2_description URDF（项目中可用的四足模型）
+      return {
+        packagePath: '/urdf/b2_description',
+        urdfUrl: '/urdf/b2_description/b2_description.urdf',
+      };
+    }
+    return null;
+  }
+
+  /** URDF Mesh 加载回调：支持 DAE (Collada) 和 STL 格式 */
+  private createUrdfMeshLoader() {
+    return (
+      path: string,
+      manager: THREE.LoadingManager,
+      done: (mesh: THREE.Object3D, err?: Error) => void,
+    ) => {
+      if (/\.dae$/i.test(path)) {
+        new ColladaLoader(manager).load(path, (dae) => { if (dae?.scene) done(dae.scene); });
+      } else if (/\.stl$/i.test(path)) {
+        new STLLoader(manager).load(path, (geom) => done(new THREE.Mesh(geom)));
+      } else {
+        console.warn(`[URDF] 不支持的 mesh 格式: ${path}`);
+      }
+    };
   }
 
   // ── 路径渲染 ──
@@ -392,31 +505,68 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     return sprite;
   }
 
-  // ── 位姿标定 ──
+  // ── 位姿标定（参照 robot-central-web PoseControls 实现） ──
 
   private calibrationState: {
     active: boolean;
-    groundPlane: THREE.Mesh | null;
-    marker: THREE.Mesh | null;
-    arrow: THREE.ArrowHelper | null;
+    arrow: THREE.Mesh | null;
+    arrowDirection: THREE.Vector3;
     confirmCallback: ((pose: { position: Vector3Value; orientation: QuaternionValue }) => void) | null;
-    mouseDownHandler: ((e: MouseEvent) => void) | null;
-    mouseMoveHandler: ((e: MouseEvent) => void) | null;
-    mouseUpHandler: ((e: MouseEvent) => void) | null;
+    pointerDownHandler: ((e: PointerEvent) => void) | null;
+    pointerMoveHandler: ((e: PointerEvent) => void) | null;
+    pointerUpHandler: ((e: PointerEvent) => void) | null;
+    intersectPoint: THREE.Vector3 | null;
     isDragging: boolean;
-    markerPosition: THREE.Vector3 | null;
   } = {
     active: false,
-    groundPlane: null,
-    marker: null,
     arrow: null,
+    arrowDirection: new THREE.Vector3(1, 0, 0),
     confirmCallback: null,
-    mouseDownHandler: null,
-    mouseMoveHandler: null,
-    mouseUpHandler: null,
+    pointerDownHandler: null,
+    pointerMoveHandler: null,
+    pointerUpHandler: null,
+    intersectPoint: null,
     isDragging: false,
-    markerPosition: null,
   };
+
+  /**
+   * 创建 3D 箭头 Mesh（圆柱杆 + 圆锥头），与 robot-central-web Arrow 一致
+   */
+  private createArrowMesh(origin: THREE.Vector3): THREE.Mesh {
+    const length = 0.8;
+    const headLength = 0.15;
+    const shaftDiameter = 0.07;
+    const headDiameter = 0.15;
+    const shaftLength = length - headLength;
+
+    // 箭杆：圆柱体
+    const shaftGeo = new THREE.CylinderGeometry(shaftDiameter * 0.5, shaftDiameter * 0.5, shaftLength, 12, 1);
+    shaftGeo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, shaftLength * 0.5, 0));
+
+    // 箭头：圆锥体
+    const headGeo = new THREE.CylinderGeometry(0, headDiameter * 0.5, headLength, 12, 1);
+    headGeo.applyMatrix4(new THREE.Matrix4().makeTranslation(0, shaftLength + headLength * 0.5, 0));
+
+    // 合并几何体
+    const merged = mergeGeometries([shaftGeo, headGeo]);
+    const material = new THREE.MeshStandardMaterial({ color: 0xff0000, depthTest: false });
+    const mesh = new THREE.Mesh(merged ?? shaftGeo, material);
+    mesh.renderOrder = 999;
+    mesh.position.copy(origin);
+    return mesh;
+  }
+
+  /**
+   * 设置箭头朝向（direction 为 XZ 平面上的方向向量）
+   */
+  private setArrowDirection(arrow: THREE.Mesh, direction: THREE.Vector3) {
+    const up = new THREE.Vector3(0, 1, 0);
+    const axis = new THREE.Vector3().crossVectors(up, direction);
+    if (axis.length() < 1e-6) return;
+    const radians = Math.acos(Math.min(1, up.dot(direction.clone().normalize())));
+    const rotMatrix = new THREE.Matrix4().makeRotationAxis(axis.normalize(), radians);
+    arrow.rotation.setFromRotationMatrix(rotMatrix);
+  }
 
   enterPoseCalibration() {
     if (!this.ssp) return;
@@ -426,127 +576,140 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     }
     this.calibrationState.active = true;
 
-    // 禁用相机控制器，防止标定拖拽被相机控制拦截
-    this.ssp.controls.enabled = false;
+    const ssp = this.ssp;
+    // 禁用相机左键旋转，防止标定拖拽被拦截（参照 PoseControls 方式）
+    const originalMouseLeft = ssp.controls.mouseButtons.left;
+    const originalTouchOne = ssp.controls.touches.one;
 
-    // 创建不可见地面平面作为 Raycaster 拾取目标
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
-    );
-    ground.rotation.x = -Math.PI / 2; // 水平放置
-    this.ssp.viewport.scene.add(ground);
-    this.calibrationState.groundPlane = ground;
+    // 确保地面点云可见（标定依赖它）
+    this.groups.groundPointCloud.visible = true;
 
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    const renderer = this.ssp.viewport.renderer;
-    const camera = this.ssp.viewport.camera;
+    // 配置点云射线检测阈值
+    ssp.viewport.raycaster.params.Points.threshold = 0.5;
 
-    // 获取 canvas 元素
-    const canvas = renderer.domElement;
+    // 水平参考面（用于拖拽计算朝向）
+    const plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+    const dirVec = new THREE.Vector3();
 
-    // 鼠标按下：放置/移动标记位置
-    this.calibrationState.mouseDownHandler = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    // 事件绑定目标：SoonSpace 的 domElement
+    const eventTarget = ssp.domElement as HTMLElement;
 
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(ground);
-      if (intersects.length === 0) return;
+    // 鼠标按下：射线检测点云 → 创建箭头
+    this.calibrationState.pointerDownHandler = (e: PointerEvent) => {
+      if (this.calibrationState.intersectPoint) return;
 
-      const point = intersects[0].point;
-      this.calibrationState.markerPosition = point.clone();
+      // 使用 SoonSpace 内置射线检测（getIntersects 接受 PointerEvent）
+      const intersects = ssp.viewport
+        .getIntersects(e, [this.groups.groundPointCloud])
+        .sort((a: THREE.Intersection, b: THREE.Intersection) =>
+          ((a as any).distanceToRay ?? a.distance) - ((b as any).distanceToRay ?? b.distance));
 
-      // 放置或移动绿色圆球标记
-      if (!this.calibrationState.marker) {
-        const marker = new THREE.Mesh(
-          new THREE.SphereGeometry(0.15, 24, 24),
-          new THREE.MeshStandardMaterial({ color: 0x22c55e }),
-        );
-        marker.position.copy(point);
-        this.ssp!.viewport.scene.add(marker);
-        this.calibrationState.marker = marker;
+      const hit = intersects[0];
+      if (!hit) return;
 
-        // 创建红色朝向箭头
-        const arrow = new THREE.ArrowHelper(
-          new THREE.Vector3(0, 0, -1), point, 1.0, 0xef4444, 0.2, 0.1,
-        );
-        this.ssp!.viewport.scene.add(arrow);
-        this.calibrationState.arrow = arrow;
+      // 点云类型需要从 geometry attribute 获取精确顶点位置
+      const snapPoint = new THREE.Vector3();
+      if (hit.object instanceof THREE.Points && hit.index != null) {
+        snapPoint
+          .fromBufferAttribute(hit.object.geometry.getAttribute('position') as THREE.BufferAttribute, hit.index)
+          .applyMatrix4(hit.object.matrixWorld);
       } else {
-        this.calibrationState.marker.position.copy(point);
-        this.calibrationState.arrow!.position.copy(point);
+        snapPoint.copy(hit.point);
       }
 
+      // 清除上一个箭头
+      if (this.calibrationState.arrow) {
+        ssp.removeObject(this.calibrationState.arrow);
+      }
+
+      // 创建箭头 Mesh 并通过 SoonSpace API 添加到场景
+      const arrow = this.createArrowMesh(snapPoint);
+      ssp.addObject(arrow);
+      ssp.render();
+
+      this.calibrationState.arrow = arrow;
+      this.calibrationState.intersectPoint = snapPoint.clone();
       this.calibrationState.isDragging = true;
+
+      // 设置参考面高度为吸附点 Y 值
+      plane.constant = snapPoint.y;
+
+      // 禁用相机控制（与参考项目一致的方式）
+      ssp.controls.mouseButtons.left = SoonSpace.ACTION.NONE;
+      ssp.controls.touches.one = SoonSpace.ACTION.NONE;
+
+      eventTarget.setPointerCapture(e.pointerId);
     };
 
-    // 鼠标移动：拖拽设定朝向
-    this.calibrationState.mouseMoveHandler = (e: MouseEvent) => {
-      if (!this.calibrationState.isDragging || !this.calibrationState.arrow || !this.calibrationState.markerPosition) return;
+    // 鼠标移动：拖拽更新箭头朝向
+    this.calibrationState.pointerMoveHandler = (e: PointerEvent) => {
+      if (!this.calibrationState.isDragging || !this.calibrationState.arrow || !this.calibrationState.intersectPoint) return;
+      e.preventDefault();
 
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      // 更新 raycaster
+      const rect = eventTarget.getBoundingClientRect();
+      const pointer = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      ssp.viewport.raycaster.setFromCamera(pointer, ssp.viewport.camera);
 
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(ground);
-      if (intersects.length === 0) return;
+      // 射线与水平面求交，计算拖拽方向
+      ssp.viewport.raycaster.ray.intersectPlane(plane, dirVec);
+      dirVec.sub(this.calibrationState.intersectPoint).normalize();
 
-      // 计算从标记位置到鼠标位置的方向
-      const target = intersects[0].point;
-      const offset = new THREE.Vector3().subVectors(target, this.calibrationState.markerPosition);
-      // 距离过近时忽略，避免方向抖动
-      if (offset.length() > 0.01) {
-        this.calibrationState.arrow.setDirection(offset.normalize());
-      }
+      // 更新箭头朝向并记录方向
+      this.setArrowDirection(this.calibrationState.arrow, dirVec);
+      this.calibrationState.arrowDirection.copy(dirVec);
+      ssp.render();
     };
 
     // 鼠标抬起：结束拖拽
-    this.calibrationState.mouseUpHandler = () => {
+    this.calibrationState.pointerUpHandler = (e: PointerEvent) => {
+      if (!this.calibrationState.isDragging) return;
       this.calibrationState.isDragging = false;
+      eventTarget.releasePointerCapture(e.pointerId);
+
+      // 恢复相机控制
+      ssp.controls.mouseButtons.left = originalMouseLeft;
+      ssp.controls.touches.one = originalTouchOne;
     };
 
-    canvas.addEventListener('mousedown', this.calibrationState.mouseDownHandler);
-    canvas.addEventListener('mousemove', this.calibrationState.mouseMoveHandler);
-    canvas.addEventListener('mouseup', this.calibrationState.mouseUpHandler);
+    eventTarget.addEventListener('pointerdown', this.calibrationState.pointerDownHandler);
+    eventTarget.addEventListener('pointermove', this.calibrationState.pointerMoveHandler);
+    eventTarget.addEventListener('pointerup', this.calibrationState.pointerUpHandler);
+    eventTarget.addEventListener('pointercancel', this.calibrationState.pointerUpHandler);
   }
 
   exitPoseCalibration() {
     if (!this.ssp) return;
     const state = this.calibrationState;
 
-    // 恢复相机控制器
-    this.ssp.controls.enabled = true;
-
     // 清理事件监听
-    const canvas = this.ssp.viewport.renderer.domElement;
-    if (state.mouseDownHandler) canvas.removeEventListener('mousedown', state.mouseDownHandler);
-    if (state.mouseMoveHandler) canvas.removeEventListener('mousemove', state.mouseMoveHandler);
-    if (state.mouseUpHandler) canvas.removeEventListener('mouseup', state.mouseUpHandler);
+    const eventTarget = this.ssp.domElement as HTMLElement | null;
+    if (eventTarget) {
+      if (state.pointerDownHandler) eventTarget.removeEventListener('pointerdown', state.pointerDownHandler);
+      if (state.pointerMoveHandler) eventTarget.removeEventListener('pointermove', state.pointerMoveHandler);
+      if (state.pointerUpHandler) {
+        eventTarget.removeEventListener('pointerup', state.pointerUpHandler);
+        eventTarget.removeEventListener('pointercancel', state.pointerUpHandler);
+      }
+    }
 
-    // 清理 3D 对象
-    if (state.groundPlane) {
-      this.ssp.viewport.scene.remove(state.groundPlane);
-      state.groundPlane.geometry.dispose();
-      (state.groundPlane.material as THREE.Material).dispose();
-    }
-    if (state.marker) {
-      this.ssp.viewport.scene.remove(state.marker);
-      state.marker.geometry.dispose();
-      (state.marker.material as THREE.Material).dispose();
-    }
+    // 通过 SoonSpace API 移除箭头对象
     if (state.arrow) {
-      this.ssp.viewport.scene.remove(state.arrow);
+      this.ssp.removeObject(state.arrow);
+      this.ssp.render();
     }
+
+    // 恢复相机控制
+    this.ssp.controls.enabled = true;
 
     // 重置状态
     this.calibrationState = {
-      active: false, groundPlane: null, marker: null, arrow: null,
-      confirmCallback: null, mouseDownHandler: null, mouseMoveHandler: null,
-      mouseUpHandler: null, isDragging: false, markerPosition: null,
+      active: false, arrow: null, arrowDirection: new THREE.Vector3(1, 0, 0),
+      confirmCallback: null, pointerDownHandler: null, pointerMoveHandler: null,
+      pointerUpHandler: null, intersectPoint: null, isDragging: false,
     };
   }
 
@@ -557,17 +720,19 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
 
   /** 外部调用确认标定，返回当前标记的 ROS 坐标位姿 */
   confirmCalibration(): { position: Vector3Value; orientation: QuaternionValue } | null {
-    const { marker, arrow, confirmCallback } = this.calibrationState;
-    if (!marker || !arrow) return null;
+    const { arrow, arrowDirection, confirmCallback } = this.calibrationState;
+    if (!arrow) return null;
 
-    // 将 Three.js 位置转换为 ROS 坐标
-    const position = threePositionToRos(marker.position);
+    // 将 Three.js 箭头位置转换为 ROS 坐标
+    const position = threePositionToRos(arrow.position);
 
-    // 从箭头方向计算四元数：箭头方向在 XZ 平面，转为绕 Y 轴的旋转
-    const dir = arrow.getWorldDirection(new THREE.Vector3());
-    const yaw = Math.atan2(dir.x, dir.z);
-    const threeQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-    const orientation = threeQuaternionToRos(threeQuat);
+    // 将 Three.js 箭头方向转换为 ROS 四元数
+    // Three.js 方向 → ROS 方向，再求与 ROS 初始前方 (1,0,0) 的旋转四元数
+    const threeToRobot = robotToThreeMatrix.clone().invert();
+    const robotDir = arrowDirection.clone().applyMatrix4(threeToRobot).normalize();
+    const initialDir = new THREE.Vector3(1, 0, 0); // ROS 前方
+    const quat = new THREE.Quaternion().setFromUnitVectors(initialDir, robotDir);
+    const orientation = { x: quat.x, y: quat.y, z: quat.z, w: quat.w };
 
     const pose = { position, orientation };
     if (confirmCallback) confirmCallback(pose);

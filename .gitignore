@@ -46,4 +46,5 @@ vite.config.d.ts
 .vscode/
 
 ### Mac OS ###
+
 .DS_Store

@@ -24,9 +24,14 @@ export interface WorkbenchTask {
 
 export type ActivePathType = 'nav' | 'topo';
 
+const ROBOT_CACHE_KEY = 'urobot-sdk:selected-robot-id';
+
 export function useRobotWorkbench() {
   const [robots, setRobots] = useState<RobotSummary[]>([]);
-  const [selectedRobotId, setSelectedRobotId] = useState<string>('');
+  // 优先从 localStorage 恢复上次选中的机器人
+  const [selectedRobotId, setSelectedRobotIdRaw] = useState<string>(
+    () => localStorage.getItem(ROBOT_CACHE_KEY) ?? '',
+  );
   const [runtime, setRuntime] = useState<RobotRuntime | undefined>();
   const [edition, setEdition] = useState<MapEdition | undefined>();
   const [navPaths, setNavPaths] = useState<NavigationPath[]>([]);
@@ -34,7 +39,17 @@ export function useRobotWorkbench() {
   const [tasks, setTasks] = useState<WorkbenchTask[]>([]);
   const [demoMode, setDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isCalibrating, setIsCalibrating] = useState(false);
+  // 交互模式：idle=常规, calibrating=位姿标定, nav-picking=单点导航选点
+  const [interactionMode, setInteractionMode] = useState<'idle' | 'calibrating' | 'nav-picking'>('idle');
+
+  // 选中机器人时同步写入 localStorage 缓存
+  const setSelectedRobotId = useCallback((id: string | ((prev: string) => string)) => {
+    setSelectedRobotIdRaw((prev) => {
+      const next = typeof id === 'function' ? id(prev) : id;
+      if (next) localStorage.setItem(ROBOT_CACHE_KEY, next);
+      return next;
+    });
+  }, []);
 
   // 路径互斥选择状态
   const [activePathType, setActivePathType] = useState<ActivePathType>('nav');
@@ -47,7 +62,11 @@ export function useRobotWorkbench() {
       if (cancelled) return;
       const rows = response.data.rows;
       setRobots(rows);
-      setSelectedRobotId((current) => current || rows[0]?.id || '');
+      // 优先使用缓存的机器人 ID（需在列表中存在），否则选第一个
+      setSelectedRobotId((current) => {
+        if (current && rows.some((r) => r.id === current)) return current;
+        return rows[0]?.id || '';
+      });
       setDemoMode(response.source === 'mock');
       setLoading(false);
     });
@@ -295,8 +314,8 @@ export function useRobotWorkbench() {
     activePath,
     activeNodes,
     navigateToSelected,
-    // 位姿标定
-    isCalibrating,
-    setIsCalibrating,
+    // 交互模式
+    interactionMode,
+    setInteractionMode,
   };
 }

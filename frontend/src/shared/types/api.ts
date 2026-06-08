@@ -46,6 +46,8 @@ export interface RobotSummary {
   status_value?: number;
   terminalType?: string;
   terminal_type?: string;
+  terminalTypeValue?: number;
+  terminal_type_value?: number;
   terminalPower?: number;
   terminal_power?: number;
   deviceTypeDesc?: string;
