@@ -127,10 +127,13 @@ export function useRobotWorkbench() {
     };
   }, [selectedRobot, runtimeEditionId]);
 
-  // 当路径数据加载完成后，自动选中第一条路径
+  // 当路径数据加载完成后，自动选中第一条路径；路径为空时清理选中状态
   useEffect(() => {
     const paths = activePathType === 'nav' ? navPaths : topoPaths;
-    if (paths.length > 0 && !paths.find((p) => p.id === selectedPathId)) {
+    if (paths.length === 0) {
+      setSelectedPathId('');
+      setSelectedNodeIds(new Set());
+    } else if (!paths.find((p) => p.id === selectedPathId)) {
       setSelectedPathId(paths[0].id);
       setSelectedNodeIds(new Set());
     }

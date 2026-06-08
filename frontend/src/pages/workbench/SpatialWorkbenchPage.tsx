@@ -115,8 +115,6 @@ export function SpatialWorkbenchPage() {
         <aside className="workbench-side">
           <RobotStatusCard robot={workbench.selectedRobot} runtime={workbench.runtime} demoMode={workbench.demoMode} />
           <NavigationTargetPanel
-            navPaths={workbench.navPaths}
-            topoPaths={workbench.topoPaths}
             activePathType={workbench.activePathType}
             onPathTypeChange={workbench.handlePathTypeChange}
             selectedPathId={workbench.selectedPathId}

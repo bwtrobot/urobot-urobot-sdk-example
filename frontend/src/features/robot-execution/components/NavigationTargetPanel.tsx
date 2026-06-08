@@ -4,8 +4,6 @@ import type { NavigationPath, PathNode, TopologyPath } from '../../../shared/typ
 import './robot-execution.css';
 
 interface NavigationTargetPanelProps {
-  navPaths: NavigationPath[];
-  topoPaths: TopologyPath[];
   activePathType: ActivePathType;
   onPathTypeChange: (type: ActivePathType) => void;
   selectedPathId: string;

@@ -71,6 +71,12 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     bimWireframe: false,
   };
 
+  // 节点渲染复用的共享 geometry，避免每次 setActivePathData 时大量创建
+  private readonly sharedGeometry = {
+    nodeNormal: new THREE.SphereGeometry(0.1, 16, 16),
+    nodeSelected: new THREE.SphereGeometry(0.15, 16, 16),
+  };
+
   private readonly groups = {
     helpers: new THREE.Group(),
     bim: new THREE.Group(),
@@ -145,8 +151,8 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     this.robot.quaternion.copy(threeQuat);
   }
 
-  setNavigationData(navPaths: NavigationPath[], topoPaths: TopologyPath[]) {
-    // 保留旧接口兼容，但不再使用——由 setActivePathData 替代
+  /** @deprecated 由 setActivePathData 替代，仅保留向后兼容 */
+  setNavigationData(_navPaths: NavigationPath[], _topoPaths: TopologyPath[]) {
     this.clearGroup(this.groups.paths);
   }
 
@@ -180,7 +186,7 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     // 渲染节点圆球和名称标签
     path.nodes.forEach((node) => {
       const isSelected = selectedNodeIds.has(node.id);
-      const radius = isSelected ? 0.15 : 0.1;
+      const geometry = isSelected ? this.sharedGeometry.nodeSelected : this.sharedGeometry.nodeNormal;
       const color = isSelected ? 0xfbbf24 : 0x94a3b8;
 
       // 计算节点在 Three.js 坐标系中的位置
@@ -188,9 +194,9 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
         ? new THREE.Vector3(node.position.x, node.position.y, node.position.z)
         : rosPositionToThree(node.position);
 
-      // 圆球标记
+      // 圆球标记（共享 geometry，仅创建新 material）
       const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 16, 16),
+        geometry,
         new THREE.MeshStandardMaterial({ color }),
       );
       sphere.position.copy(pos);
@@ -413,7 +419,11 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
   };
 
   enterPoseCalibration() {
-    if (!this.ssp || this.calibrationState.active) return;
+    if (!this.ssp) return;
+    // 防御重复进入：先清理上一次标定状态
+    if (this.calibrationState.active) {
+      this.exitPoseCalibration();
+    }
     this.calibrationState.active = true;
 
     // 禁用相机控制器，防止标定拖拽被相机控制拦截
@@ -487,9 +497,10 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
 
       // 计算从标记位置到鼠标位置的方向
       const target = intersects[0].point;
-      const dir = new THREE.Vector3().subVectors(target, this.calibrationState.markerPosition).normalize();
-      if (dir.length() > 0.01) {
-        this.calibrationState.arrow.setDirection(dir);
+      const offset = new THREE.Vector3().subVectors(target, this.calibrationState.markerPosition);
+      // 距离过近时忽略，避免方向抖动
+      if (offset.length() > 0.01) {
+        this.calibrationState.arrow.setDirection(offset.normalize());
       }
     };
 

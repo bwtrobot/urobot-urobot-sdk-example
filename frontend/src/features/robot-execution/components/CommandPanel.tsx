@@ -34,7 +34,7 @@ export function CommandPanel({
         {/* 位姿标定按钮（替代原充电按钮） */}
         {isCalibrating ? (
           <>
-            <button type="button" onClick={onConfirmCalibration}>
+            <button type="button" disabled={!robotName} onClick={onConfirmCalibration}>
               <Crosshair size={16} />
               确认标定
             </button>
@@ -43,7 +43,7 @@ export function CommandPanel({
             </button>
           </>
         ) : (
-          <button type="button" onClick={onStartCalibration}>
+          <button type="button" disabled={!robotName} onClick={onStartCalibration}>
             <Crosshair size={16} />
             位姿标定
           </button>
