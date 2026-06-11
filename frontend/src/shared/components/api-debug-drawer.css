@@ -1,0 +1,56 @@
+.api-debug {
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+.api-debug-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  padding: 10px 12px;
+  color: #1e293b;
+  background: transparent;
+  cursor: pointer;
+}
+
+.api-debug-body {
+  max-height: 320px;
+  overflow: auto;
+  border-top: 1px solid #e2e8f0;
+  padding: 10px;
+}
+
+.api-log {
+  border-radius: 6px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.api-log + .api-log {
+  margin-top: 8px;
+}
+
+.api-log header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.api-log.mock header span {
+  color: #b45309;
+}
+
+.api-log pre {
+  max-height: 140px;
+  overflow: auto;
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  color: #475569;
+  font-size: 11px;
+}
