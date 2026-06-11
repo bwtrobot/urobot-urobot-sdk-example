@@ -41,6 +41,11 @@ function getWsBaseUrl() {
   }
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  if (import.meta.env.DEV && baseURL === '/api') {
+    // 开发环境的 HTTP API 仍走 Vite 代理，实时 WS 默认直连后端，避免和 Vite HMR 连接混在同一端口。
+    return `${protocol}//${window.location.hostname}:8080`;
+  }
+
   return `${protocol}//${window.location.host}${baseURL}`.replace(/\/$/, '');
 }
 
