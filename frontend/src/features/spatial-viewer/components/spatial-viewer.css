@@ -154,6 +154,9 @@
   right: 18px;
   bottom: 18px;
   z-index: 100;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
 }
 
 @media (max-width: 640px) {

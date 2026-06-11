@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CameraStreamPanel } from '../../features/robot-execution/components/CameraStreamPanel';
 import { CommandPanel } from '../../features/robot-execution/components/CommandPanel';
 import { MotionPad, type MoveDirection } from '../../features/robot-execution/components/MotionPad';
 import { NavigationTargetPanel } from '../../features/robot-execution/components/NavigationTargetPanel';
+import { RealtimeTopicControls } from '../../features/robot-execution/components/RealtimeTopicControls';
 import { RobotStatusCard } from '../../features/robot-execution/components/RobotStatusCard';
 import { TaskTimeline } from '../../features/robot-execution/components/TaskTimeline';
 import { useRobotWorkbench } from '../../features/robot-execution/hooks/useRobotWorkbench';
@@ -15,6 +17,7 @@ const defaultLayers: LayerVisibility = {
   bim: true,
   globalPointCloud: true,
   groundPointCloud: true,
+  realtimePointCloud: true,
   paths: true,
 };
 
@@ -32,10 +35,30 @@ const moveKeyByDirection: Record<MoveDirection, string> = {
 };
 
 export function SpatialWorkbenchPage() {
-  const workbench = useRobotWorkbench();
   const viewerRef = useRef<SpatialViewerHandle>(null);
+  const previousCameraUrlRef = useRef<string | undefined>();
+  const [cameraImageUrl, setCameraImageUrl] = useState<string | undefined>();
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const handleRealtimeBinary = useCallback((topic: string, data: ArrayBuffer) => {
+    if (topic === '/x_nav/current_pointcloud') {
+      viewerRef.current?.getAdapter().updateRealtimePointCloud(data);
+      return;
+    }
+    if (topic.includes('/camera/') && topic.endsWith('/webp')) {
+      const nextUrl = URL.createObjectURL(new Blob([data], { type: 'image/webp' }));
+      if (previousCameraUrlRef.current) URL.revokeObjectURL(previousCameraUrlRef.current);
+      previousCameraUrlRef.current = nextUrl;
+      setCameraImageUrl(nextUrl);
+      setCameraVisible(true);
+    }
+  }, []);
+  const workbench = useRobotWorkbench({ onRealtimeBinary: handleRealtimeBinary });
   const [layers, setLayers] = useState(defaultLayers);
   const [renderSettings, setRenderSettings] = useState(defaultRenderSettings);
+
+  useEffect(() => () => {
+    if (previousCameraUrlRef.current) URL.revokeObjectURL(previousCameraUrlRef.current);
+  }, []);
 
   // 进入场景交互模式（位姿标定 / 单点导航共用同一套点云选点交互）
   function enterSceneInteraction(mode: 'calibrating' | 'nav-picking') {
@@ -119,11 +142,31 @@ export function SpatialWorkbenchPage() {
           onLayersChange={setLayers}
           onRenderSettingsChange={setRenderSettings}
           motionPad={<MotionPad onMove={handleMove} onRotate={handleRotate} />}
-          debugDrawer={<ApiDebugDrawer />}
+          debugDrawer={(
+            <>
+              <ApiDebugDrawer />
+              <CameraStreamPanel
+                imageUrl={cameraImageUrl}
+                visible={cameraVisible}
+                onClose={() => setCameraVisible(false)}
+              />
+            </>
+          )}
         />
 
         <aside className="workbench-side">
-          <RobotStatusCard robot={workbench.selectedRobot} runtime={workbench.runtime} demoMode={workbench.demoMode} />
+          <RobotStatusCard
+            robot={workbench.selectedRobot}
+            runtime={workbench.runtime}
+            demoMode={workbench.demoMode}
+            realtimeStatus={workbench.realtimeStatus}
+          />
+          <RealtimeTopicControls
+            subscribedTopics={workbench.subscribedTopics}
+            onSubscribe={workbench.subscribeRealtimeTopic}
+            onUnsubscribe={workbench.unsubscribeRealtimeTopic}
+            onFpsChange={workbench.setRealtimeTopicFps}
+          />
           <NavigationTargetPanel
             activePathType={workbench.activePathType}
             onPathTypeChange={workbench.handlePathTypeChange}

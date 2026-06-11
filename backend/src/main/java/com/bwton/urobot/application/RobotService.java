@@ -20,9 +20,11 @@ import java.util.stream.Collectors;
 @Service
 public class RobotService {
     private final UTwinClient uTwinClient;
+    private final RobotRealtimeService realtimeService;
 
-    public RobotService(UTwinClient uTwinClient) {
+    public RobotService(UTwinClient uTwinClient, RobotRealtimeService realtimeService) {
         this.uTwinClient = uTwinClient;
+        this.realtimeService = realtimeService;
     }
 
     public Mono<Page<RobotResponse>> page(PageQuery query) {
@@ -74,7 +76,10 @@ public class RobotService {
                     SendCommandResponse.class,
                     uTwinClient.tokenManager(),
                     uTwinClient.retryPolicy());
-            return response.taskId();
+            String taskId = response.taskId();
+            // 指令仍走现有 HTTP 直传路径；若实时通道已连接，手动注册 taskId 以接入 TASK_REPLY 推送。
+            realtimeService.registerTask(robotId, taskId);
+            return taskId;
         }).subscribeOn(Schedulers.boundedElastic());
     }
 

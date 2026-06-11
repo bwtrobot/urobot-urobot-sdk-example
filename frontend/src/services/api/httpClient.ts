@@ -51,7 +51,7 @@ function appendLog(entry: Omit<ApiLogEntry, 'id' | 'timestamp'>) {
   logs = [
     {
       ...entry,
-      id: crypto.randomUUID(),
+      id: createLogId(),
       timestamp: new Date().toISOString(),
     },
     ...logs,
@@ -59,6 +59,14 @@ function appendLog(entry: Omit<ApiLogEntry, 'id' | 'timestamp'>) {
 
   const snapshot = getApiLogs();
   notifySubscribers(snapshot);
+}
+
+function createLogId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `log-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function getApiLogs(): ApiLogEntry[] {

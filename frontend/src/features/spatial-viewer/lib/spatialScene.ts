@@ -24,6 +24,7 @@ import {
   threeQuaternionToRos,
 } from '../../../shared/utils/pose';
 import type { LayerVisibility } from '../components/LayerDropdown';
+import { PointCloud2Parser, applyRobotToThree } from './pointCloud2Parser';
 
 export interface RenderSettings {
   pointSize: 'small' | 'medium' | 'large';
@@ -46,6 +47,7 @@ export interface SpatialSceneAdapter {
   setActivePathData(data: ActivePathData | null): void;
   setLayerVisibility(layers: LayerVisibility): void;
   setRenderSettings(settings: RenderSettings): void;
+  updateRealtimePointCloud(binary: ArrayBuffer): void;
   // 位姿标定
   enterPoseCalibration(): void;
   exitPoseCalibration(): void;
@@ -89,10 +91,12 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     bim: new THREE.Group(),
     globalPointCloud: new THREE.Group(),
     groundPointCloud: new THREE.Group(),
+    realtimePointCloud: new THREE.Group(),
     paths: new THREE.Group(),
     calibration: new THREE.Group(),
   };
   private readonly robot = new THREE.Group();
+  private realtimePointCloud: THREE.Points | null = null;
   // 当前已加载的机型标识，避免重复加载
   private loadedTerminalType: number | null = null;
 
@@ -228,11 +232,32 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     this.groups.globalPointCloud.visible = layers.globalPointCloud;
     this.groups.groundPointCloud.visible = layers.groundPointCloud;
     this.groups.paths.visible = layers.paths;
+    this.groups.realtimePointCloud.visible = layers.realtimePointCloud;
   }
 
   setRenderSettings(settings: RenderSettings) {
     this.renderSettings = settings;
     this.applyRenderSettings();
+  }
+
+  updateRealtimePointCloud(binary: ArrayBuffer) {
+    if (!this.ssp) return;
+    try {
+      const cloud = PointCloud2Parser.parse(binary);
+      applyRobotToThree(cloud.positions);
+      const points = this.ensureRealtimePointCloud(cloud.count);
+      const geometry = points.geometry;
+      const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+      const color = geometry.getAttribute('color') as THREE.BufferAttribute;
+      position.array.set(cloud.positions);
+      color.array.set(cloud.colors);
+      position.needsUpdate = true;
+      color.needsUpdate = true;
+      geometry.setDrawRange(0, cloud.count);
+      this.ssp.render();
+    } catch (error) {
+      console.warn('[RealtimePointCloud] 解析失败', error);
+    }
   }
 
   dispose() {
@@ -449,7 +474,7 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     const pointSize = pointSizes[settings.pointSize];
     const opacity = opacityValues[settings.opacity];
 
-    [this.groups.globalPointCloud, this.groups.groundPointCloud].forEach((group) => {
+    [this.groups.globalPointCloud, this.groups.groundPointCloud, this.groups.realtimePointCloud].forEach((group) => {
       group.traverse((object) => {
         if (object instanceof THREE.Points) {
           const material = object.material as THREE.PointsMaterial;
@@ -474,6 +499,30 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
         });
       }
     });
+  }
+
+  private ensureRealtimePointCloud(maxPoints: number) {
+    if (this.realtimePointCloud) return this.realtimePointCloud;
+
+    const geometry = new THREE.BufferGeometry();
+    const position = new THREE.BufferAttribute(new Float32Array(maxPoints * 3), 3);
+    const color = new THREE.BufferAttribute(new Float32Array(maxPoints * 3), 3);
+    position.setUsage(THREE.DynamicDrawUsage);
+    color.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('position', position);
+    geometry.setAttribute('color', color);
+    geometry.setDrawRange(0, 0);
+
+    const material = new THREE.PointsMaterial({
+      size: pointSizes[this.renderSettings.pointSize],
+      color: 0xff2b2b,
+      vertexColors: false,
+      opacity: opacityValues[this.renderSettings.opacity],
+      transparent: this.renderSettings.opacity !== 'solid',
+    });
+    this.realtimePointCloud = new THREE.Points(geometry, material);
+    this.groups.realtimePointCloud.add(this.realtimePointCloud);
+    return this.realtimePointCloud;
   }
 
   // ── 文字标签 ──

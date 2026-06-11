@@ -9,7 +9,19 @@ import {
   sendRobotCommand,
   type RobotCommandCode,
 } from '../../../services/api/robotApi';
-import type { MapEdition, NavigationPath, PathNode, RobotRuntime, RobotSummary, TaskResult, TopologyPath } from '../../../shared/types/api';
+import { createRealtimeClient, getRealtimeSnapshot, type RealtimeClient } from '../../../services/api/realtimeApi';
+import type {
+  MapEdition,
+  NavigationPath,
+  PathNode,
+  RealtimeConnectionStatus,
+  RealtimeEvent,
+  RealtimeTopicSubscription,
+  RobotRuntime,
+  RobotSummary,
+  TaskResult,
+  TopologyPath,
+} from '../../../shared/types/api';
 
 // 任务终态集合，轮询到这些状态时停止
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'timeout', '完成', '失败', '已取消', '超时']);
@@ -20,13 +32,26 @@ export interface WorkbenchTask {
   source: 'real' | 'mock';
   status: string;
   result?: TaskResult;
+  realtimeSource?: boolean;
+  updatedAt?: string;
+  resultSummary?: string;
+  compensationStatus?: 'idle' | 'polling' | 'done';
 }
 
 export type ActivePathType = 'nav' | 'topo';
 
 const ROBOT_CACHE_KEY = 'urobot-sdk:selected-robot-id';
 
-export function useRobotWorkbench() {
+export interface UseRobotWorkbenchOptions {
+  onRealtimeBinary?: (topic: string, data: ArrayBuffer) => void;
+}
+
+export const realtimeTopicCatalog: RealtimeTopicSubscription[] = [
+  { topic: '/x_nav/current_pointcloud', label: '实时点云', binary: true, throttleRate: 333, minFps: 1, maxFps: 10 },
+  { topic: '/camera/color/image_raw/compressed/webp', label: '相机画面', binary: true, throttleRate: 200, minFps: 1, maxFps: 15 },
+];
+
+export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
   const [robots, setRobots] = useState<RobotSummary[]>([]);
   // 优先从 localStorage 恢复上次选中的机器人
   const [selectedRobotId, setSelectedRobotIdRaw] = useState<string>(
@@ -37,6 +62,9 @@ export function useRobotWorkbench() {
   const [navPaths, setNavPaths] = useState<NavigationPath[]>([]);
   const [topoPaths, setTopoPaths] = useState<TopologyPath[]>([]);
   const [tasks, setTasks] = useState<WorkbenchTask[]>([]);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeConnectionStatus>('DISCONNECTED');
+  const [subscribedTopics, setSubscribedTopics] = useState<Set<string>>(new Set());
+  const [latestRobotInfo, setLatestRobotInfo] = useState<Record<string, unknown> | undefined>();
   const [demoMode, setDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
   // 交互模式：idle=常规, calibrating=位姿标定, nav-picking=单点导航选点
@@ -55,6 +83,12 @@ export function useRobotWorkbench() {
   const [activePathType, setActivePathType] = useState<ActivePathType>('nav');
   const [selectedPathId, setSelectedPathId] = useState<string>('');
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const realtimeClientRef = useRef<RealtimeClient | null>(null);
+  const realtimeBinaryHandlerRef = useRef(options.onRealtimeBinary);
+
+  useEffect(() => {
+    realtimeBinaryHandlerRef.current = options.onRealtimeBinary;
+  }, [options.onRealtimeBinary]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +114,90 @@ export function useRobotWorkbench() {
     [robots, selectedRobotId],
   );
 
+  const mergeRobotInfo = useCallback((jsonData?: string) => {
+    if (!jsonData) return;
+    try {
+      const parsed = JSON.parse(jsonData) as Record<string, unknown>;
+      setLatestRobotInfo(parsed);
+      setRuntime((current) => mergeRuntimeWithRobotInfo(current, parsed));
+    } catch (error) {
+      console.warn('解析实时机器人状态失败', error);
+    }
+  }, []);
+
+  const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
+    console.log('[RealtimeEvent]', event);
+    const eventStatus = event.status as RealtimeConnectionStatus | undefined;
+    if (eventStatus) setRealtimeStatus(eventStatus);
+    if (event.type === 'connected') setRealtimeStatus('CONNECTED');
+    if (event.type === 'disconnected') setRealtimeStatus('DISCONNECTED');
+    if (event.type === 'reconnecting') setRealtimeStatus('RECONNECTING');
+    if (event.type === 'kicked') setRealtimeStatus('KICKED');
+    if (event.type === 'error') setRealtimeStatus('ERROR');
+
+    const jsonData = event.jsonData ?? event.json_data;
+    if (event.type === 'robot_info') {
+      mergeRobotInfo(jsonData);
+    }
+    if (event.type === 'task_reply') {
+      const taskId = event.taskId ?? event.task_id;
+      if (!taskId) return;
+      setTasks((current) =>
+        current.map((task) =>
+          task.taskId === taskId
+            ? {
+              ...task,
+              status: event.status ?? task.status,
+              realtimeSource: true,
+              updatedAt: event.timestamp ?? new Date().toISOString(),
+              resultSummary: jsonData,
+            }
+            : task,
+        ),
+      );
+    }
+  }, [mergeRobotInfo]);
+
+  useEffect(() => {
+    realtimeClientRef.current?.close();
+    realtimeClientRef.current = null;
+    setSubscribedTopics(new Set());
+    setLatestRobotInfo(undefined);
+    setRealtimeStatus('DISCONNECTED');
+
+    if (!selectedRobotId) return;
+
+    const client = createRealtimeClient({
+      robotId: selectedRobotId,
+      onEvent: handleRealtimeEvent,
+      onBinary: (topic, data) => realtimeBinaryHandlerRef.current?.(topic, data),
+      onStatus: (status) => {
+        if (status === 'open') setRealtimeStatus('CONNECTING');
+        if (status === 'closed') setRealtimeStatus('DISCONNECTED');
+        if (status === 'error') setRealtimeStatus('ERROR');
+        if (status === 'mock') setDemoMode(true);
+      },
+    });
+    realtimeClientRef.current = client;
+    client.connect();
+
+    void getRealtimeSnapshot(selectedRobotId).then((snapshot) => {
+      setDemoMode((current) => current || snapshot.source === 'mock');
+      setRealtimeStatus(snapshot.data.status);
+      const info = snapshot.data.robotInfo ?? snapshot.data.robot_info;
+      mergeRobotInfo(info);
+      const topics = snapshot.data.subscribedTopics ?? snapshot.data.subscribed_topics ?? [];
+      setSubscribedTopics(new Set(topics));
+    });
+
+    return () => {
+      client.close();
+      if (realtimeClientRef.current === client) {
+        realtimeClientRef.current = null;
+      }
+    };
+  }, [selectedRobotId, handleRealtimeEvent, mergeRobotInfo]);
+
   useEffect(() => {
     if (!selectedRobotId) return;
     let cancelled = false;
@@ -93,12 +211,17 @@ export function useRobotWorkbench() {
     }
 
     void refreshRuntime();
+    if (realtimeStatus === 'CONNECTED') {
+      return () => {
+        cancelled = true;
+      };
+    }
     const timer = window.setInterval(refreshRuntime, 3000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [selectedRobotId]);
+  }, [selectedRobotId, realtimeStatus]);
 
   // 从 version_path 中解析 editionId，格式: {mapId}/maincenter/{editionId}
   const runtimeEditionId = useMemo(() => {
@@ -199,6 +322,26 @@ export function useRobotWorkbench() {
     pollingAbortRef.current = null;
   }, [selectedRobotId]);
 
+  const subscribeRealtimeTopic = useCallback((topic: string, options?: { binary?: boolean; throttleRate?: number }) => {
+    realtimeClientRef.current?.subscribe([topic], options);
+    setSubscribedTopics((current) => new Set(current).add(topic));
+  }, []);
+
+  const unsubscribeRealtimeTopic = useCallback((topic: string) => {
+    realtimeClientRef.current?.unsubscribe(topic);
+    setSubscribedTopics((current) => {
+      const next = new Set(current);
+      next.delete(topic);
+      return next;
+    });
+  }, []);
+
+  const setRealtimeTopicFps = useCallback((topic: string, fps: number, binary = true) => {
+    const throttleRate = Math.round(1000 / Math.max(1, fps));
+    realtimeClientRef.current?.subscribe([topic], { binary, throttleRate });
+    setSubscribedTopics((current) => new Set(current).add(topic));
+  }, []);
+
   const sendCommand = useCallback(
     async (commandCode: RobotCommandCode, commandParam: unknown) => {
       if (!selectedRobotId) return;
@@ -214,13 +357,21 @@ export function useRobotWorkbench() {
         const taskId = response.data;
         setDemoMode((current) => current || response.source === 'mock');
         setTasks((current) => [
-          { taskId, commandCode, source: response.source, status: response.source === 'mock' ? '演示执行中' : '已下发' },
+          {
+            taskId,
+            commandCode,
+            source: response.source,
+            status: realtimeStatus === 'CONNECTED' ? 'PENDING' : response.source === 'mock' ? '演示执行中' : '已下发',
+            realtimeSource: realtimeStatus === 'CONNECTED',
+            updatedAt: new Date().toISOString(),
+            compensationStatus: realtimeStatus === 'CONNECTED' ? 'polling' : 'idle',
+          },
           ...current,
         ]);
 
-        // 轮询监控任务最终状态，支持取消
+        // HTTP 查询作为最终一致性补偿：实时已连接时降低频率，断线或 Mock 时保持原轮询频率。
         const maxPolls = 30;
-        const pollInterval = 2000;
+        const pollInterval = realtimeStatus === 'CONNECTED' ? 5000 : 2000;
         for (let i = 0; i < maxPolls; i++) {
           if (abortController.signal.aborted) break;
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -231,7 +382,13 @@ export function useRobotWorkbench() {
           setTasks((current) =>
             current.map((task) =>
               task.taskId === taskId
-                ? { ...task, status: latestStatus || task.status, result: taskResponse.data[0] }
+                ? {
+                  ...task,
+                  status: latestStatus || task.status,
+                  result: taskResponse.data[0],
+                  updatedAt: new Date().toISOString(),
+                  compensationStatus: TERMINAL_STATUSES.has(latestStatus) ? 'done' : 'polling',
+                }
                 : task,
             ),
           );
@@ -243,7 +400,7 @@ export function useRobotWorkbench() {
         }
       }
     },
-    [selectedRobotId],
+    [selectedRobotId, realtimeStatus],
   );
 
   // 根据选中节点构造并下发导航指令
@@ -296,6 +453,9 @@ export function useRobotWorkbench() {
     selectedRobotId,
     setSelectedRobotId,
     runtime,
+    realtimeStatus,
+    subscribedTopics,
+    latestRobotInfo,
     edition,
     navPaths,
     topoPaths,
@@ -303,6 +463,9 @@ export function useRobotWorkbench() {
     demoMode,
     loading,
     sendCommand,
+    subscribeRealtimeTopic,
+    unsubscribeRealtimeTopic,
+    setRealtimeTopicFps,
     // 路径互斥选择
     activePathType,
     handlePathTypeChange,
@@ -318,4 +481,81 @@ export function useRobotWorkbench() {
     interactionMode,
     setInteractionMode,
   };
+}
+
+function mergeRuntimeWithRobotInfo(current: RobotRuntime | undefined, info: Record<string, unknown>): RobotRuntime {
+  const next: RobotRuntime = { ...(current ?? {}) };
+  const soc = readNumber(info, ['soc', 'battery', 'battery_soc']);
+  if (soc != null) next.soc = soc;
+
+  const terminalStatus = readString(info, ['terminal_status', 'terminalStatus', 'status']);
+  if (terminalStatus) next.terminal_status = terminalStatus;
+
+  const charge = readNumber(info, ['charge', 'charge_status']);
+  if (charge != null) {
+    next.charge = { ...(next.charge ?? {}), status: charge };
+  }
+
+  const pose = readObject(info, ['pose', 'odom.pose', 'ros_odom.pose']);
+  if (pose) {
+    const position = readObject(pose, ['position']);
+    const orientation = readObject(pose, ['orientation']);
+    if (position && orientation) {
+      next.ros_odom = {
+        ...(next.ros_odom ?? {}),
+        pose: {
+          position: {
+            x: readNumber(position, ['x']) ?? 0,
+            y: readNumber(position, ['y']) ?? 0,
+            z: readNumber(position, ['z']) ?? 0,
+          },
+          orientation: {
+            x: readNumber(orientation, ['x']) ?? 0,
+            y: readNumber(orientation, ['y']) ?? 0,
+            z: readNumber(orientation, ['z']) ?? 0,
+            w: readNumber(orientation, ['w']) ?? 1,
+          },
+        },
+      };
+    }
+  }
+
+  return next;
+}
+
+function readNumber(source: Record<string, unknown>, paths: string[]) {
+  for (const path of paths) {
+    const value = readPath(source, path);
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return undefined;
+}
+
+function readString(source: Record<string, unknown>, paths: string[]) {
+  for (const path of paths) {
+    const value = readPath(source, path);
+    if (typeof value === 'string') return value;
+  }
+  return undefined;
+}
+
+function readObject(source: Record<string, unknown>, paths: string[]) {
+  for (const path of paths) {
+    const value = readPath(source, path);
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+  }
+  return undefined;
+}
+
+function readPath(source: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, key) => {
+    if (!current || typeof current !== 'object') return undefined;
+    return (current as Record<string, unknown>)[key];
+  }, source);
 }

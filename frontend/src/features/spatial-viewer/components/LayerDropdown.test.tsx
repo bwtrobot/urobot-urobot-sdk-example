@@ -8,6 +8,7 @@ describe('LayerDropdown', () => {
     bim: true,
     globalPointCloud: true,
     groundPointCloud: true,
+    realtimePointCloud: true,
     paths: true,
   };
 
@@ -22,8 +23,9 @@ describe('LayerDropdown', () => {
     expect(screen.getByRole('button', { name: /BIM 模型/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /全局点云/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /地面点云/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /实时点云/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /导航点 \/ 路径/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getAllByLabelText('可见')).toHaveLength(4);
+    expect(screen.getAllByLabelText('可见')).toHaveLength(5);
 
     await user.click(screen.getByRole('button', { name: /地面点云/ }));
 

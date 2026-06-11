@@ -14,8 +14,13 @@ export function TaskTimeline({ tasks }: TaskTimelineProps) {
         {tasks.map((task) => (
           <article key={task.taskId} className="task-row">
             <strong>{task.commandCode}</strong>
-            <span>{task.status}</span>
+            <span>
+              {task.status}
+              {task.realtimeSource ? <em>WS</em> : null}
+              {task.compensationStatus === 'polling' ? <em>HTTP 补偿</em> : null}
+            </span>
             <code>{task.taskId}</code>
+            {task.updatedAt ? <small>{new Date(task.updatedAt).toLocaleTimeString()}</small> : null}
           </article>
         ))}
       </div>

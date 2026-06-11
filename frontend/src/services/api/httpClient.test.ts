@@ -68,6 +68,34 @@ describe('apiRequest', () => {
     ]);
   });
 
+  it('logs requests when crypto.randomUUID is unavailable', async () => {
+    http.defaults.adapter = vi.fn(async () => {
+      throw new Error('network unavailable');
+    }) as AxiosAdapter;
+    const cryptoValue = globalThis.crypto;
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: {},
+    });
+
+    let result;
+    try {
+      result = await apiRequest<{ id: string }>({
+        method: 'GET',
+        url: '/robots/random-id-fallback',
+        fallbackData: { id: 'fallback' },
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'crypto', {
+        configurable: true,
+        value: cryptoValue,
+      });
+    }
+
+    expect(result?.source).toBe('mock');
+    expect(getApiLogs()[0].id).toMatch(/^log-/);
+  });
+
   it('notifies subscribers when request logs change', async () => {
     http.defaults.adapter = vi.fn(async (config) => ({
       data: { result: ['robot-1'] },

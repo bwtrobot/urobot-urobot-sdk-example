@@ -80,6 +80,6 @@
 
 ## 11. 全量验证
 
-- [ ] 11.1 后端编译验证 `mvn clean compile`
-- [ ] 11.2 前端 lint + 测试 + 构建验证 `npm run lint && npm test && npm run build`
-- [ ] 11.3 浏览器端到端验证：3D 场景、图层控制、渲染设置、指令发送、任务轮询、Mock 降级
+- [x] 11.1 后端编译验证 `mvn clean compile`
+- [x] 11.2 前端 lint + 测试 + 构建验证 `npm run lint && npm test && npm run build`
+- [x] 11.3 浏览器端到端验证：3D 场景、图层控制、渲染设置、指令发送、任务轮询、Mock 降级

@@ -184,3 +184,67 @@ export interface TaskResult {
     task_command_id: string;
   }>;
 }
+
+export type RealtimeConnectionStatus =
+  | 'DISCONNECTED'
+  | 'CONNECTING'
+  | 'CONNECTED'
+  | 'RECONNECTING'
+  | 'KICKED'
+  | 'ERROR';
+
+export type RealtimeEventType =
+  | 'connected'
+  | 'connecting'
+  | 'disconnected'
+  | 'reconnecting'
+  | 'kicked'
+  | 'error'
+  | 'topic'
+  | 'robot_info'
+  | 'task_reply';
+
+export interface RealtimeEvent {
+  type: RealtimeEventType | string;
+  robotId?: string;
+  robot_id?: string;
+  topic?: string;
+  taskId?: string;
+  task_id?: string;
+  status?: string;
+  jsonData?: string;
+  json_data?: string;
+  binarySize?: number;
+  binary_size?: number;
+  reason?: string;
+  timestamp?: string;
+}
+
+export interface RealtimeSnapshot {
+  robotId?: string;
+  robot_id?: string;
+  status: RealtimeConnectionStatus;
+  robotInfo?: string;
+  robot_info?: string;
+  subscribedTopics?: string[];
+  subscribed_topics?: string[];
+}
+
+export interface RealtimeControlMessage {
+  action: RealtimeAction;
+  topic?: string;
+  topics?: string[];
+  binary?: boolean;
+  throttleRate?: number;
+}
+
+export type RealtimeAction = 'connect' | 'subscribe' | 'unsubscribe' | 'close';
+
+export interface RealtimeTopicSubscription {
+  topic: string;
+  label: string;
+  binary?: boolean;
+  throttleRate?: number;
+  minFps?: number;
+  maxFps?: number;
+}

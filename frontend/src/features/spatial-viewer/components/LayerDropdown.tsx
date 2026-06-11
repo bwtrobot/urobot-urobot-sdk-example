@@ -5,6 +5,7 @@ export interface LayerVisibility {
   bim: boolean;
   globalPointCloud: boolean;
   groundPointCloud: boolean;
+  realtimePointCloud: boolean;
   paths: boolean;
 }
 
@@ -20,6 +21,7 @@ const layerRows: Array<{
   { key: 'bim', label: 'BIM 模型' },
   { key: 'globalPointCloud', label: '全局点云' },
   { key: 'groundPointCloud', label: '地面点云' },
+  { key: 'realtimePointCloud', label: '实时点云' },
   { key: 'paths', label: '导航点 / 路径' },
 ];
 

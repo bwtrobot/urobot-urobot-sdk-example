@@ -1,10 +1,12 @@
 package com.bwton.urobot.interfaces.api;
 
 import com.bwton.urobot.application.RobotService;
+import com.bwton.urobot.application.RobotRealtimeService;
 import com.bwton.urobot.infrastructure.lang.Page;
 import com.bwton.urobot.infrastructure.lang.PageQuery;
 import com.bwton.urobot.infrastructure.lang.Result;
 import com.bwton.urobot.interfaces.request.SendCommandBody;
+import com.bwton.urobot.interfaces.response.RealtimeSnapshot;
 import com.bwton.urobot.interfaces.response.RobotResponse;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.util.MultiValueMap;
@@ -19,9 +21,11 @@ import java.util.Map;
 @RequestMapping("robot")
 public class RobotHandler {
     private final RobotService service;
+    private final RobotRealtimeService realtimeService;
 
-    public RobotHandler(RobotService service) {
+    public RobotHandler(RobotService service, RobotRealtimeService realtimeService) {
         this.service = service;
+        this.realtimeService = realtimeService;
     }
 
     @GetMapping("page")
@@ -53,5 +57,10 @@ public class RobotHandler {
             }
         });
         return service.getTaskResult(robotId, taskIds).map(Result::ok);
+    }
+
+    @GetMapping("realtime/{robotId}/snapshot")
+    public Mono<Result<RealtimeSnapshot>> realtimeSnapshot(@PathVariable String robotId) {
+        return Mono.just(Result.ok(realtimeService.snapshot(robotId)));
     }
 }
