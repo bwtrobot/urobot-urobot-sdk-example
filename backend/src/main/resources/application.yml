@@ -13,3 +13,7 @@ utwin:
     connect-timeout: ${UTWIN_WS_CONNECT_TIMEOUT:10s}
     task-cache-max-size: ${UTWIN_WS_TASK_CACHE_MAX_SIZE:1000}
     task-cache-ttl: ${UTWIN_WS_TASK_CACHE_TTL:1h}
+logging:
+  level:
+    root: INFO
+    com.bwton.utwin: DEBUG

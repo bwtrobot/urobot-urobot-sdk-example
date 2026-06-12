@@ -12,20 +12,20 @@ interface PointField {
   datatype: number;
 }
 
-interface PointCloud2Message {
+// rosbridge JSON 推送的 PointCloud2 消息：点数据以 base64 字符串承载在 data 字段。
+export interface PointCloud2Message {
   fields: PointField[];
   point_step: number;
   width?: number;
   height?: number;
-  data: Uint8Array | ArrayBuffer | number[];
+  data: string | Uint8Array | ArrayBuffer | number[];
 }
 
 const FLOAT32 = 7;
 const UINT32 = 6;
 
 export class PointCloud2Parser {
-  static parse(buffer: ArrayBuffer, maxPoints = 20000): ParsedPointCloud {
-    const message = decodeCbor(buffer) as PointCloud2Message;
+  static parse(message: PointCloud2Message, maxPoints = 20000): ParsedPointCloud {
     const data = normalizeData(message.data);
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     const pointStep = message.point_step;
@@ -90,78 +90,19 @@ function readNumber(view: DataView, offset: number, datatype: number) {
   return view.getFloat32(offset, true);
 }
 
-function normalizeData(data: Uint8Array | ArrayBuffer | number[]) {
+function normalizeData(data: string | Uint8Array | ArrayBuffer | number[]) {
+  // rosbridge JSON 推送里点云字节以 base64 字符串承载在 data 字段
+  if (typeof data === 'string') return base64ToUint8Array(data);
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   return new Uint8Array(data);
 }
 
-function decodeCbor(buffer: ArrayBuffer): unknown {
-  const view = new DataView(buffer);
-  let offset = 0;
-
-  function readLength(additional: number): number {
-    if (additional < 24) return additional;
-    if (additional === 24) return view.getUint8(offset++);
-    if (additional === 25) {
-      const value = view.getUint16(offset, false);
-      offset += 2;
-      return value;
-    }
-    if (additional === 26) {
-      const value = view.getUint32(offset, false);
-      offset += 4;
-      return value;
-    }
-    throw new Error('暂不支持该 CBOR 长度编码');
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
   }
-
-  function readItem(): unknown {
-    const initial = view.getUint8(offset++);
-    const major = initial >> 5;
-    const additional = initial & 0x1f;
-    const length = readLength(additional);
-
-    if (major === 0) return length;
-    if (major === 1) return -1 - length;
-    if (major === 2) {
-      const bytes = new Uint8Array(buffer, offset, length);
-      offset += length;
-      return new Uint8Array(bytes);
-    }
-    if (major === 3) {
-      const bytes = new Uint8Array(buffer, offset, length);
-      offset += length;
-      return new TextDecoder().decode(bytes);
-    }
-    if (major === 4) {
-      const array = [];
-      for (let i = 0; i < length; i += 1) array.push(readItem());
-      return array;
-    }
-    if (major === 5) {
-      const object: Record<string, unknown> = {};
-      for (let i = 0; i < length; i += 1) {
-        const key = String(readItem());
-        object[key] = readItem();
-      }
-      return object;
-    }
-    if (major === 7 && additional === 26) {
-      const value = view.getFloat32(offset, false);
-      offset += 4;
-      return value;
-    }
-    if (major === 7 && additional === 27) {
-      const value = view.getFloat64(offset, false);
-      offset += 8;
-      return value;
-    }
-    if (major === 7 && additional === 20) return false;
-    if (major === 7 && additional === 21) return true;
-    if (major === 7 && additional === 22) return null;
-    throw new Error('暂不支持该 CBOR 数据类型');
-  }
-
-  return readItem();
+  return bytes;
 }

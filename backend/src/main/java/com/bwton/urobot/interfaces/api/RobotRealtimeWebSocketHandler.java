@@ -4,21 +4,26 @@ import com.bwton.urobot.application.RealtimeOutboundMessage;
 import com.bwton.urobot.application.RobotRealtimeService;
 import com.bwton.urobot.interfaces.request.RealtimeControlMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.socket.CloseStatus;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Component
 public class RobotRealtimeWebSocketHandler implements WebSocketHandler {
+    private static final Logger log = LoggerFactory.getLogger(RobotRealtimeWebSocketHandler.class);
     private final RobotRealtimeService realtimeService;
     private final ObjectMapper objectMapper;
 
@@ -30,11 +35,22 @@ public class RobotRealtimeWebSocketHandler implements WebSocketHandler {
     @Override
     public Mono<Void> handle(WebSocketSession session) {
         String robotId = resolveRobotId(session);
+        // robotId 解析不到时直接拒绝握手，避免在 service 里留下 key 为空串的僵尸 session 并触发前端无限重连。
+        if (robotId.isEmpty()) {
+            log.warn("realtime ws 缺少 robotId，关闭连接: uri={}", session.getHandshakeInfo().getUri());
+            return session.close(CloseStatus.BAD_DATA.withReason("missing robotId"));
+        }
+
         Sinks.Many<RealtimeOutboundMessage> sink = realtimeService.attachBrowserSession(robotId, session.getId());
 
         Mono<Void> inbound = session.receive()
                 .filter(message -> message.getType() == WebSocketMessage.Type.TEXT)
-                .flatMap(message -> handleControlMessage(robotId, message.getPayloadAsText()))
+                // 单条控制指令失败只记录日志，不能让 error 冒泡终止整条浏览器 WS（否则前端 onclose 后会立即重连，形成死循环）。
+                .flatMap(message -> handleControlMessage(robotId, message.getPayloadAsText())
+                        .onErrorResume(error -> {
+                            log.warn("处理实时控制指令失败: robotId={}", robotId, error);
+                            return Mono.empty();
+                        }))
                 .doFinally(signalType -> realtimeService.detachBrowserSession(robotId, session.getId()))
                 .then();
 
@@ -102,13 +118,17 @@ public class RobotRealtimeWebSocketHandler implements WebSocketHandler {
         return buffer.array();
     }
 
-    @SuppressWarnings("unchecked")
+    // WebFlux 默认不会把 HandlerMapping 的 URI 模板变量拷进 WebSocketSession attributes，
+    // 因此直接从握手 URI 的最后一段解析 robotId（映射为 /robot/realtime/{robotId}）。
     private String resolveRobotId(WebSocketSession session) {
-        Object value = session.getAttributes().get("robotId");
-        if (value instanceof String) {
-            return (String) value;
+        String path = session.getHandshakeInfo().getUri().getPath();
+        int idx = path.lastIndexOf('/');
+        String raw = idx >= 0 ? path.substring(idx + 1) : path;
+        // 前端使用 encodeURIComponent，需要解码还原。
+        try {
+            return URLDecoder.decode(raw, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            return raw;
         }
-        Map<String, String> pathVariables = (Map<String, String>) session.getAttributes().get("org.springframework.web.reactive.HandlerMapping.uriTemplateVariables");
-        return pathVariables == null ? "" : pathVariables.getOrDefault("robotId", "");
     }
 }

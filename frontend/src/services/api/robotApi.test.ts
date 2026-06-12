@@ -95,8 +95,8 @@ describe('robotApi', () => {
     const fallback = await listRobots();
 
     expect(fallback.source).toBe('mock');
-    expect(fallback.data.rows).toHaveLength(2);
-    expect(fallback.data.total_count).toBe(2);
+    expect(fallback.data.rows).toHaveLength(3);
+    expect(fallback.data.total_count).toBe(3);
   });
 
   it('gets runtime from a rows result and from a direct result', async () => {

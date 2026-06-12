@@ -112,7 +112,9 @@ export function createRealtimeClient(options: RealtimeClientOptions): RealtimeCl
         currentSocket.close();
         return;
       }
-      retryCount = 0;
+      // 注意：此处不重置 retryCount。传输层握手成功不代表业务连接可用，
+      // 若握手后业务 connect 立即失败并被服务端关闭，重置计数会让重连次数永远耗不尽，形成死循环。
+      // retryCount 仅在收到业务层 CONNECTED 事件后重置（见 onmessage）。
       options.onStatus?.('open');
       send({ action: 'connect' });
       flushPending();
@@ -121,7 +123,12 @@ export function createRealtimeClient(options: RealtimeClientOptions): RealtimeCl
     currentSocket.onmessage = (message) => {
       if (socket !== currentSocket || closedByUser) return;
       if (typeof message.data === 'string') {
-        options.onEvent(JSON.parse(message.data) as RealtimeEvent);
+        const event = JSON.parse(message.data) as RealtimeEvent;
+        // 业务层确认连接已建立后才清零重试计数，确保失败场景下的重连预算可被正常耗尽。
+        if (event.type === 'connected' || event.status === 'CONNECTED') {
+          retryCount = 0;
+        }
+        options.onEvent(event);
         return;
       }
 

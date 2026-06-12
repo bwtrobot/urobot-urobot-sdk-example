@@ -220,6 +220,16 @@ export interface RealtimeEvent {
   timestamp?: string;
 }
 
+// 实时推送摘要条目：摘要级 Topic 推送在工作台中按时间累积展示
+export interface RealtimePushSummaryEntry {
+  id: string;
+  type: string;
+  topic?: string;
+  timestamp: string;
+  jsonSummary?: string;
+  binarySize?: number;
+}
+
 export interface RealtimeSnapshot {
   robotId?: string;
   robot_id?: string;

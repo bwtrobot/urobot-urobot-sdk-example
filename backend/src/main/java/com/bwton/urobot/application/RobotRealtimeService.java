@@ -82,7 +82,9 @@ public class RobotRealtimeService {
             subscribe(robotId, Collections.singletonList(Topics.ROBOT_UPLOAD_INFO), false, 0L).block();
         }).subscribeOn(Schedulers.boundedElastic()).then().onErrorResume(error -> {
             session.status = RealtimeConnectionStatus.ERROR;
-            broadcastText(session, statusEvent(robotId, session.status, error.getMessage()));
+            // SDK 异常的 getMessage() 常为 null，兜底成异常类名，避免前端收到 reason:null 难以排障。
+            String reason = error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
+            broadcastText(session, statusEvent(robotId, session.status, reason));
             return Mono.error(error);
         });
     }

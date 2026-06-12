@@ -24,7 +24,7 @@ import {
   threeQuaternionToRos,
 } from '../../../shared/utils/pose';
 import type { LayerVisibility } from '../components/LayerDropdown';
-import { PointCloud2Parser, applyRobotToThree } from './pointCloud2Parser';
+import { PointCloud2Parser, applyRobotToThree, type PointCloud2Message } from './pointCloud2Parser';
 
 export interface RenderSettings {
   pointSize: 'small' | 'medium' | 'large';
@@ -47,7 +47,7 @@ export interface SpatialSceneAdapter {
   setActivePathData(data: ActivePathData | null): void;
   setLayerVisibility(layers: LayerVisibility): void;
   setRenderSettings(settings: RenderSettings): void;
-  updateRealtimePointCloud(binary: ArrayBuffer): void;
+  updateRealtimePointCloud(message: PointCloud2Message): void;
   // 位姿标定
   enterPoseCalibration(): void;
   exitPoseCalibration(): void;
@@ -240,10 +240,10 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
     this.applyRenderSettings();
   }
 
-  updateRealtimePointCloud(binary: ArrayBuffer) {
+  updateRealtimePointCloud(message: PointCloud2Message) {
     if (!this.ssp) return;
     try {
-      const cloud = PointCloud2Parser.parse(binary);
+      const cloud = PointCloud2Parser.parse(message);
       applyRobotToThree(cloud.positions);
       const points = this.ensureRealtimePointCloud(cloud.count);
       const geometry = points.geometry;

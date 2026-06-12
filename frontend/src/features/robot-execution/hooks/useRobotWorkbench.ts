@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getChargingPoints, getMapEdition, getMapEditions, listNavigationPaths, listTopologyPaths } from '../../../services/api/mapApi';
 import { threePositionToRos, threeQuaternionToRos } from '../../../shared/utils/pose';
+import { isRobotOffline } from '../../../shared/utils/robotStatus';
 import {
   buildCommandPayload,
   getRobotRuntime,
@@ -16,6 +17,7 @@ import type {
   PathNode,
   RealtimeConnectionStatus,
   RealtimeEvent,
+  RealtimePushSummaryEntry,
   RealtimeTopicSubscription,
   RobotRuntime,
   RobotSummary,
@@ -43,13 +45,19 @@ export type ActivePathType = 'nav' | 'topo';
 const ROBOT_CACHE_KEY = 'urobot-sdk:selected-robot-id';
 
 export interface UseRobotWorkbenchOptions {
-  onRealtimeBinary?: (topic: string, data: ArrayBuffer) => void;
+  // 点云/相机等渲染类 Topic 的解析后消息（rosbridge msg 体），交由页面分发到三维场景或相机画面
+  onRealtimeTopicMessage?: (topic: string, message: Record<string, unknown>) => void;
 }
 
 export const realtimeTopicCatalog: RealtimeTopicSubscription[] = [
   { topic: '/x_nav/current_pointcloud', label: '实时点云', binary: true, throttleRate: 333, minFps: 1, maxFps: 10 },
   { topic: '/camera/color/image_raw/compressed/webp', label: '相机画面', binary: true, throttleRate: 200, minFps: 1, maxFps: 15 },
 ];
+
+// 渲染类 Topic（点云/相机）：从「实时推送」摘要剥离，解析后直接渲染，不进摘要列表
+const renderedRealtimeTopics = new Set(
+  realtimeTopicCatalog.filter((item) => item.binary).map((item) => item.topic),
+);
 
 export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
   const [robots, setRobots] = useState<RobotSummary[]>([]);
@@ -65,6 +73,7 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeConnectionStatus>('DISCONNECTED');
   const [subscribedTopics, setSubscribedTopics] = useState<Set<string>>(new Set());
   const [latestRobotInfo, setLatestRobotInfo] = useState<Record<string, unknown> | undefined>();
+  const [realtimeEvents, setRealtimeEvents] = useState<RealtimePushSummaryEntry[]>([]);
   const [demoMode, setDemoMode] = useState(false);
   const [loading, setLoading] = useState(true);
   // 交互模式：idle=常规, calibrating=位姿标定, nav-picking=单点导航选点
@@ -84,11 +93,12 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
   const [selectedPathId, setSelectedPathId] = useState<string>('');
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const realtimeClientRef = useRef<RealtimeClient | null>(null);
-  const realtimeBinaryHandlerRef = useRef(options.onRealtimeBinary);
+  const realtimeTopicHandlerRef = useRef(options.onRealtimeTopicMessage);
+  const realtimeSeqRef = useRef(0);
 
   useEffect(() => {
-    realtimeBinaryHandlerRef.current = options.onRealtimeBinary;
-  }, [options.onRealtimeBinary]);
+    realtimeTopicHandlerRef.current = options.onRealtimeTopicMessage;
+  }, [options.onRealtimeTopicMessage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,10 +106,10 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
       if (cancelled) return;
       const rows = response.data.rows;
       setRobots(rows);
-      // 优先使用缓存的机器人 ID（需在列表中存在），否则选第一个
+      // 优先使用缓存的机器人 ID（需在列表中存在且在线），否则选第一个在线机器人
       setSelectedRobotId((current) => {
-        if (current && rows.some((r) => r.id === current)) return current;
-        return rows[0]?.id || '';
+        if (current && rows.some((r) => r.id === current && !isRobotOffline(r))) return current;
+        return rows.find((r) => !isRobotOffline(r))?.id || '';
       });
       setDemoMode(response.source === 'mock');
       setLoading(false);
@@ -136,6 +146,36 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     if (event.type === 'error') setRealtimeStatus('ERROR');
 
     const jsonData = event.jsonData ?? event.json_data;
+
+    // 点云/相机为高频渲染类 Topic：从摘要剥离，解析 rosbridge 信封后交页面渲染（msg.data 内含 base64）
+    if (event.type === 'topic' && event.topic && renderedRealtimeTopics.has(event.topic)) {
+      if (jsonData) {
+        try {
+          const parsed = JSON.parse(jsonData) as { msg?: Record<string, unknown> };
+          const message = parsed.msg ?? (parsed as Record<string, unknown>);
+          realtimeTopicHandlerRef.current?.(event.topic, message);
+        } catch (error) {
+          console.warn('解析实时渲染 Topic 失败', event.topic, error);
+        }
+      }
+      return;
+    }
+
+    // 摘要级 Topic 推送（topic / robot_info / task_reply）按时间累积，供「实时推送」摘要卡片展示
+    if (event.type === 'topic' || event.type === 'robot_info' || event.type === 'task_reply') {
+      const binarySize = event.binarySize ?? event.binary_size;
+      const timestamp = event.timestamp ?? new Date().toISOString();
+      const entry: RealtimePushSummaryEntry = {
+        id: `${timestamp}-${(realtimeSeqRef.current += 1)}`,
+        type: event.type,
+        topic: event.topic,
+        timestamp,
+        jsonSummary: jsonData ? jsonData.slice(0, 120) : undefined,
+        binarySize: binarySize ?? undefined,
+      };
+      setRealtimeEvents((current) => [entry, ...current].slice(0, 50));
+    }
+
     if (event.type === 'robot_info') {
       mergeRobotInfo(jsonData);
     }
@@ -163,6 +203,7 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     realtimeClientRef.current = null;
     setSubscribedTopics(new Set());
     setLatestRobotInfo(undefined);
+    setRealtimeEvents([]);
     setRealtimeStatus('DISCONNECTED');
 
     if (!selectedRobotId) return;
@@ -170,7 +211,6 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     const client = createRealtimeClient({
       robotId: selectedRobotId,
       onEvent: handleRealtimeEvent,
-      onBinary: (topic, data) => realtimeBinaryHandlerRef.current?.(topic, data),
       onStatus: (status) => {
         if (status === 'open') setRealtimeStatus('CONNECTING');
         if (status === 'closed') setRealtimeStatus('DISCONNECTED');
@@ -456,6 +496,7 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     realtimeStatus,
     subscribedTopics,
     latestRobotInfo,
+    realtimeEvents,
     edition,
     navPaths,
     topoPaths,
