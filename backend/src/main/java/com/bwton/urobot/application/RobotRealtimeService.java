@@ -130,6 +130,8 @@ public class RobotRealtimeService {
                 session.client.close();
             }
             session.client = null;
+            // 回调随旧 client 一并失效，必须复位标志，否则下次 connect 时 registerCallbacks 会提前 return，新 client 收不到任何回调。
+            session.callbacksRegistered = false;
             session.robotInfoJson = null;
             session.subscriptions.clear();
             session.status = RealtimeConnectionStatus.DISCONNECTED;
