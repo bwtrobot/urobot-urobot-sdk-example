@@ -3,11 +3,11 @@ package com.bwton.urobot.application;
 import com.bwton.urobot.interfaces.response.RealtimeConnectionStatus;
 import com.bwton.urobot.interfaces.response.RealtimeEvent;
 import com.bwton.urobot.interfaces.response.RealtimeSnapshot;
-import com.bwton.utwin.opensdk.services.UTwinClient;
-import com.bwton.utwin.opensdk.ws.model.DisconnectReason;
-import com.bwton.utwin.opensdk.ws.model.TopicData;
-import com.bwton.utwin.opensdk.ws.model.Topics;
-import com.bwton.utwin.opensdk.ws.realtime.RobotRealtimeClient;
+import io.github.bwtrobot.opensdk.services.URobotClient;
+import io.github.bwtrobot.opensdk.ws.model.DisconnectReason;
+import io.github.bwtrobot.opensdk.ws.model.TopicData;
+import io.github.bwtrobot.opensdk.ws.model.Topics;
+import io.github.bwtrobot.opensdk.ws.realtime.RobotRealtimeClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -29,12 +29,12 @@ import java.util.concurrent.ConcurrentMap;
 @Service
 public class RobotRealtimeService {
     private static final Duration LAST_SESSION_CLOSE_DELAY = Duration.ofSeconds(5);
-    private final UTwinClient uTwinClient;
+    private final URobotClient uRobotClient;
     private final ObjectMapper objectMapper;
     private final ConcurrentMap<String, RealtimeRobotSession> sessions = new ConcurrentHashMap<>();
 
-    public RobotRealtimeService(UTwinClient uTwinClient, ObjectMapper objectMapper) {
-        this.uTwinClient = uTwinClient;
+    public RobotRealtimeService(URobotClient uRobotClient, ObjectMapper objectMapper) {
+        this.uRobotClient = uRobotClient;
         this.objectMapper = objectMapper;
     }
 
@@ -75,7 +75,7 @@ public class RobotRealtimeService {
         broadcastText(session, statusEvent(robotId, session.status, null));
 
         return Mono.fromRunnable(() -> {
-            RobotRealtimeClient client = uTwinClient.robot().realtime(robotId);
+            RobotRealtimeClient client = uRobotClient.robot().realtime(robotId);
             session.client = client;
             registerCallbacks(session, client);
             client.connect();
@@ -94,7 +94,7 @@ public class RobotRealtimeService {
         if (topics == null || topics.isEmpty()) return Mono.empty();
 
         return Mono.fromRunnable(() -> {
-            RobotRealtimeClient client = session.client != null ? session.client : uTwinClient.robot().realtime(robotId);
+            RobotRealtimeClient client = session.client != null ? session.client : uRobotClient.robot().realtime(robotId);
             session.client = client;
             registerCallbacks(session, client);
 

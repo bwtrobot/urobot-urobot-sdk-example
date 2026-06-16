@@ -2,8 +2,8 @@ package com.bwton.urobot.application;
 
 import com.bwton.urobot.infrastructure.lang.Page;
 import com.bwton.urobot.infrastructure.lang.PageQuery;
-import com.bwton.utwin.opensdk.services.UTwinClient;
-import com.bwton.utwin.opensdk.services.map.model.*;
+import io.github.bwtrobot.opensdk.services.URobotClient;
+import io.github.bwtrobot.opensdk.services.map.model.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -13,17 +13,17 @@ import java.util.stream.Collectors;
 
 @Service
 public class MapService {
-    private final UTwinClient uTwinClient;
+    private final URobotClient uRobotClient;
 
-    public MapService(UTwinClient uTwinClient) {
-        this.uTwinClient = uTwinClient;
+    public MapService(URobotClient uRobotClient) {
+        this.uRobotClient = uRobotClient;
     }
 
     public Mono<List<Map<String, Object>>> listEditions(String mapId) {
         return Mono.fromSupplier(() -> {
             ListMapEditionsRequest req = ListMapEditionsRequest.builder()
                     .mapId(mapId).build();
-            List<MapEdition> editions = uTwinClient.map().listEditions(req).data();
+            List<MapEdition> editions = uRobotClient.map().listEditions(req).data();
             return editions.stream().map(this::editionToMap).collect(Collectors.toList());
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -32,7 +32,7 @@ public class MapService {
         return Mono.fromSupplier(() -> {
             GetMapEditionRequest req = GetMapEditionRequest.builder()
                     .editionId(editionId).build();
-            MapEdition edition = uTwinClient.map().getEdition(req).edition();
+            MapEdition edition = uRobotClient.map().getEdition(req).edition();
             return Collections.singletonList(editionToMap(edition));
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -41,7 +41,7 @@ public class MapService {
         return Mono.fromSupplier(() -> {
             GetChargingStationsRequest req = GetChargingStationsRequest.builder()
                     .editionId(editionId).build();
-            List<MapPoint> points = uTwinClient.map().getChargingStations(req).data();
+            List<MapPoint> points = uRobotClient.map().getChargingStations(req).data();
             return points.stream().map(this::pointToMap).collect(Collectors.toList());
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -53,11 +53,11 @@ public class MapService {
                     .pageNum(query.getPageNo())
                     .pageSize(query.getPageSize())
                     .build();
-            ListNavPathsResponse resp = uTwinClient.map().navPath().list(req);
+            ListNavPathsResponse resp = uRobotClient.map().navPath().list(req);
 
             // 顺序调用 SDK 获取路径 ID，避免 parallelStream 占用 ForkJoinPool 公共线程池
             List<String> ids = resp.data().stream().map(item -> {
-                GetNavPathByUuidResponse edition = uTwinClient.map().navPath().getByUuid(
+                GetNavPathByUuidResponse edition = uRobotClient.map().navPath().getByUuid(
                         GetNavPathByUuidRequest.builder()
                                 .uuid(item.uuid())
                                 .editionId(editionId)
@@ -67,7 +67,7 @@ public class MapService {
 
             List<Map<String, Object>> rows = ids.isEmpty()
                     ? Collections.emptyList()
-                    : uTwinClient.map().navPath().listPoints(ListNavPathPointsRequest.builder().ids(ids).build())
+                    : uRobotClient.map().navPath().listPoints(ListNavPathPointsRequest.builder().ids(ids).build())
                     .data().stream()
                     .filter(Objects::nonNull)
                     .map(this::navPathDetailToMap)
@@ -90,11 +90,11 @@ public class MapService {
                     .pageNum(query.getPageNo())
                     .pageSize(query.getPageSize())
                     .build();
-            ListTopoPathsResponse resp = uTwinClient.map().topoPath().list(req);
+            ListTopoPathsResponse resp = uRobotClient.map().topoPath().list(req);
 
             // 顺序调用 SDK 获取路径 ID，避免 parallelStream 占用 ForkJoinPool 公共线程池
             List<String> ids = resp.data().stream().map(item -> {
-                GetTopoPathByUuidResponse edition = uTwinClient.map().topoPath().getByUuid(
+                GetTopoPathByUuidResponse edition = uRobotClient.map().topoPath().getByUuid(
                         GetTopoPathByUuidRequest.builder()
                                 .uuid(item.uuid())
                                 .editionId(editionId)
@@ -104,7 +104,7 @@ public class MapService {
 
             List<Map<String, Object>> rows = ids.isEmpty()
                     ? Collections.emptyList()
-                    : uTwinClient.map().topoPath().listPoints(ListTopoPathPointsRequest.builder().ids(ids).build())
+                    : uRobotClient.map().topoPath().listPoints(ListTopoPathPointsRequest.builder().ids(ids).build())
                     .data().stream()
                     .filter(Objects::nonNull)
                     .map(this::topoPathDetailToMap)

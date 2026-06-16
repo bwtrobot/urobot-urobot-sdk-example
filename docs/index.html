@@ -5,13 +5,13 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="generator" content="Asciidoctor 2.0.20">
-<title>uTwin OpenSDK Java 开发者指南</title>
-<link rel="stylesheet" href="assets/css/utwin-doc.css">
+<title>uRobot OpenSDK Java 开发者指南</title>
+<link rel="stylesheet" href="assets/css/urobot-doc.css">
 <link rel="stylesheet" href="assets/highlight.js/styles/github.min.css">
 </head>
 <body class="book toc2 toc-left">
 <div id="header">
-<h1>uTwin OpenSDK Java 开发者指南</h1>
+<h1>uRobot OpenSDK Java 开发者指南</h1>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
 <ul class="sectlevel1">
@@ -65,8 +65,19 @@
 <li><a href="#_topic_与_taskcache_参考">23. Topic 与 TaskCache 参考</a>
 <ul class="sectlevel2">
 <li><a href="#_topic_列表">23.1. Topic 列表</a></li>
-<li><a href="#_wsconfiguration_参数">23.2. WsConfiguration 参数</a></li>
-<li><a href="#_taskcache_行为">23.3. TaskCache 行为</a></li>
+<li><a href="#_topic_数据形态与消费方式">23.2. Topic 数据形态与消费方式</a></li>
+<li><a href="#_robot_upload_info_快照_2">23.3. robot_upload_info 快照</a></li>
+<li><a href="#_渲染类高频_topic点云_相机">23.4. 渲染类高频 Topic（点云 / 相机）</a>
+<ul class="sectlevel3">
+<li><a href="#_节流降采样">23.4.1. 节流（降采样）</a></li>
+<li><a href="#_浏览器二进制帧格式">23.4.2. 浏览器二进制帧格式</a></li>
+<li><a href="#_rosbridge_信封">23.4.3. rosbridge 信封</a></li>
+</ul>
+</li>
+<li><a href="#_任务结果推送task_reply">23.5. 任务结果推送（task_reply）</a></li>
+<li><a href="#_连接状态">23.6. 连接状态</a></li>
+<li><a href="#_wsconfiguration_参数">23.7. WsConfiguration 参数</a></li>
+<li><a href="#_taskcache_行为">23.8. TaskCache 行为</a></li>
 </ul>
 </li>
 <li><a href="#_兼容性和升级">24. 兼容性和升级</a></li>
@@ -77,7 +88,7 @@
 <div id="preamble">
 <div class="sectionbody">
 <div class="paragraph">
-<p>uTwin OpenSDK Java 是面向 uTwin 具身智能中枢 Open API 的 Java 8+ 客户端。SDK 封装 AccessKey/SecretKey 签名、Token 获取和刷新、HTTP 连接池、错误处理、重试策略和分页遍历，业务代码只需要构建请求对象并调用对应服务客户端。</p>
+<p>uRobot OpenSDK Java 是面向 uRobot 具身智能中枢 Open API 的 Java 8+ 客户端。SDK 封装 AccessKey/SecretKey 签名、Token 获取和刷新、HTTP 连接池、错误处理、重试策略和分页遍历，业务代码只需要构建请求对象并调用对应服务客户端。</p>
 </div>
 <div class="paragraph">
 <p>当前版本覆盖 <code>/api/open/v1</code> 下的机器人、地图、拓扑路径、导航路径、讲解、动作等接口。SDK 不依赖 Spring，可在普通 Java、Spring Boot、批处理任务和集成平台中使用。</p>
@@ -101,7 +112,7 @@
 </ul>
 </div>
 <div class="paragraph">
-<p>核心调用流程为：构建 <code>UTwinClient</code>，选择领域客户端，构建 Request，调用接口并读取 Response。SDK 会在请求前自动获取 Token，并在 Token 过期或服务返回 401 时刷新后重试一次。</p>
+<p>核心调用流程为：构建 <code>URobotClient</code>，选择领域客户端，构建 Request，调用接口并读取 Response。SDK 会在请求前自动获取 Token，并在 Token 过期或服务返回 401 时刷新后重试一次。</p>
 </div>
 </div>
 </div>
@@ -117,7 +128,7 @@
 <p>Maven 3.8 或更高版本。</p>
 </li>
 <li>
-<p>可访问 uTwin 具身智能中枢 Open API 服务端地址。</p>
+<p>可访问 uRobot 具身智能中枢 Open API 服务端地址。</p>
 </li>
 <li>
 <p>已开通的 AccessKey 和 SecretKey。</p>
@@ -138,8 +149,8 @@
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;dependency&gt;
-    &lt;groupId&gt;com.bwton.utwin&lt;/groupId&gt;
-    &lt;artifactId&gt;utwin-opensdk-services&lt;/artifactId&gt;
+    &lt;groupId&gt;io.github.bwtrobot&lt;/groupId&gt;
+    &lt;artifactId&gt;urobot-opensdk-services&lt;/artifactId&gt;
     &lt;version&gt;3.2.0&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
 </div>
@@ -150,8 +161,8 @@
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;dependency&gt;
-    &lt;groupId&gt;com.bwton.utwin&lt;/groupId&gt;
-    &lt;artifactId&gt;utwin-opensdk-core&lt;/artifactId&gt;
+    &lt;groupId&gt;io.github.bwtrobot&lt;/groupId&gt;
+    &lt;artifactId&gt;urobot-opensdk-core&lt;/artifactId&gt;
     &lt;version&gt;3.2.0&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
 </div>
@@ -166,8 +177,8 @@
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">export UTWIN_ACCESS_KEY=your-access-key
-export UTWIN_SECRET_KEY=your-secret-key</code></pre>
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">export UROBOT_ACCESS_KEY=your-access-key
+export UROBOT_SECRET_KEY=your-secret-key</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -175,8 +186,8 @@ export UTWIN_SECRET_KEY=your-secret-key</code></pre>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">UTwinClient client = UTwinClient.builder()
-    .endpoint("https://utwin.example.com")
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">URobotClient client = URobotClient.builder()
+    .endpoint("https://urobot.example.com")
     .credentialsProvider(EnvironmentCredentialsProvider.create())
     .build();</code></pre>
 </div>
@@ -197,8 +208,8 @@ export UTWIN_SECRET_KEY=your-secret-key</code></pre>
 <div class="sectionbody">
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">try (UTwinClient client = UTwinClient.builder()
-        .endpoint("https://utwin.example.com")
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">try (URobotClient client = URobotClient.builder()
+        .endpoint("https://urobot.example.com")
         .credentialsProvider(StaticCredentialsProvider.create(
             AccessKeyCredentials.of("your-access-key", "your-secret-key")))
         .build()) {
@@ -216,7 +227,7 @@ export UTWIN_SECRET_KEY=your-secret-key</code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p><code>UTwinClient</code> 实现 <code>AutoCloseable</code>，建议按应用生命周期复用，并在应用退出时关闭。</p>
+<p><code>URobotClient</code> 实现 <code>AutoCloseable</code>，建议按应用生命周期复用，并在应用退出时关闭。</p>
 </div>
 </div>
 </div>
@@ -252,12 +263,12 @@ SendCommandResponse command = client.robot().sendCommand(
 <h2 id="_创建客户端">7. 创建客户端</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p><code>UTwinClient</code> 是线程安全的入口对象，会复用 HTTP 连接池、Token 管理器和子客户端。</p>
+<p><code>URobotClient</code> 是线程安全的入口对象，会复用 HTTP 连接池、Token 管理器和子客户端。</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">UTwinClient client = UTwinClient.builder()
-    .endpoint("https://utwin.example.com")
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">URobotClient client = URobotClient.builder()
+    .endpoint("https://urobot.example.com")
     .credentialsProvider(EnvironmentCredentialsProvider.create())
     .build();</code></pre>
 </div>
@@ -279,7 +290,7 @@ SendCommandResponse command = client.robot().sendCommand(
 <p><code>StaticCredentialsProvider</code>：代码中显式传入固定 AccessKey 和 SecretKey。</p>
 </li>
 <li>
-<p><code>EnvironmentCredentialsProvider</code>：从 <code>UTWIN_ACCESS_KEY</code> 和 <code>UTWIN_SECRET_KEY</code> 读取。</p>
+<p><code>EnvironmentCredentialsProvider</code>：从 <code>UROBOT_ACCESS_KEY</code> 和 <code>UROBOT_SECRET_KEY</code> 读取。</p>
 </li>
 </ul>
 </div>
@@ -303,8 +314,8 @@ SendCommandResponse command = client.robot().sendCommand(
     .defaultMaxPerRoute(20)
     .build();
 
-UTwinClient client = UTwinClient.builder()
-    .endpoint("https://utwin.example.com")
+URobotClient client = URobotClient.builder()
+    .endpoint("https://urobot.example.com")
     .credentialsProvider(EnvironmentCredentialsProvider.create())
     .httpConfiguration(httpConfiguration)
     .build();</code></pre>
@@ -385,7 +396,7 @@ ListMapsResponse response = client.map().listMaps(request);</code></pre>
 <h2 id="_错误处理">13. 错误处理</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>SDK 异常基类为 <code>UTwinException</code>：</p>
+<p>SDK 异常基类为 <code>URobotException</code>：</p>
 </div>
 <div class="ulist">
 <ul>
@@ -454,19 +465,19 @@ ListMapsResponse response = client.map().listMaps(request);</code></pre>
 <h2 id="_websocket_实时数据通道">15. WebSocket 实时数据通道</h2>
 <div class="sectionbody">
 <div class="paragraph">
-<p>SDK 1.1.0 新增 WebSocket 实时数据通道，允许开发者订阅机器人 Topic 数据（速度、点云、相机帧、关节状态等），并接收 OpenAPI 任务结果的实时推送。</p>
+<p>SDK 提供 WebSocket 实时数据通道，允许开发者订阅机器人 Topic 数据（速度、点云、相机帧、关节状态等），并接收 OpenAPI 任务结果的实时推送。</p>
 </div>
 <div class="sect2">
 <h3 id="_前置条件">15.1. 前置条件</h3>
 <div class="paragraph">
-<p>使用 WS 实时通道需要额外引入 <code>utwin-opensdk-ws</code> 模块：</p>
+<p>使用 WS 实时通道需要额外引入 <code>urobot-opensdk-ws</code> 模块：</p>
 </div>
 <div class="listingblock">
 <div class="content">
 <pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;dependency&gt;
-    &lt;groupId&gt;com.bwton.utwin&lt;/groupId&gt;
-    &lt;artifactId&gt;utwin-opensdk-ws&lt;/artifactId&gt;
-    &lt;version&gt;${utwin-opensdk.version}&lt;/version&gt;
+    &lt;groupId&gt;io.github.bwtrobot&lt;/groupId&gt;
+    &lt;artifactId&gt;urobot-opensdk-ws&lt;/artifactId&gt;
+    &lt;version&gt;${urobot-opensdk.version}&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
 </div>
 </div>
@@ -474,11 +485,11 @@ ListMapsResponse response = client.map().listMaps(request);</code></pre>
 <div class="sect2">
 <h3 id="_启用_ws_配置">15.2. 启用 WS 配置</h3>
 <div class="paragraph">
-<p>构建 <code>UTwinClient</code> 时通过 <code>wsConfiguration()</code> 启用 WS 能力：</p>
+<p>构建 <code>URobotClient</code> 时通过 <code>wsConfiguration()</code> 启用 WS 能力：</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">UTwinClient client = UTwinClient.builder()
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">URobotClient client = URobotClient.builder()
     .endpoint("https://your-server.com")
     .credentialsProvider(StaticCredentialsProvider.create("accessKey", "secretKey"))
     .wsConfiguration(WsConfiguration.builder()
@@ -639,7 +650,7 @@ String status = realtime.taskCache().getStatus(taskId); // PENDING/EXECUTING/FIN
 <pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">realtime.close();  // 关闭 WS、停止心跳、清理订阅
 // 关闭后调用任何方法将抛出 IllegalStateException
 
-// UTwinClient.close() 也会级联关闭所有 RobotRealtimeClient
+// URobotClient.close() 也会级联关闭所有 RobotRealtimeClient
 client.close();</code></pre>
 </div>
 </div>
@@ -691,7 +702,7 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 <div class="ulist">
 <ul>
 <li>
-<p>复用 <code>UTwinClient</code>，不要为每次请求创建新客户端。</p>
+<p>复用 <code>URobotClient</code>，不要为每次请求创建新客户端。</p>
 </li>
 <li>
 <p>对批量查询使用 SDK 提供的批量接口，例如地图版本批量查询。</p>
@@ -772,7 +783,7 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 <div class="ulist">
 <ul>
 <li>
-<p><code>UTwinClient</code>：SDK 入口。</p>
+<p><code>URobotClient</code>：SDK 入口。</p>
 </li>
 <li>
 <p><code>AccessKeyCredentials</code>：AccessKey/SecretKey 凭证。</p>
@@ -792,7 +803,7 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 </ul>
 </div>
 <div class="paragraph">
-<p>服务对象按领域分布在 <code>com.bwton.utwin.opensdk.services.robot.model</code> 和 <code>com.bwton.utwin.opensdk.services.map.model</code> 包下。</p>
+<p>服务对象按领域分布在 <code>io.github.bwtrobot.opensdk.services.robot.model</code> 和 <code>io.github.bwtrobot.opensdk.services.map.model</code> 包下。</p>
 </div>
 </div>
 </div>
@@ -856,22 +867,51 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 <div class="sect1">
 <h2 id="_topic_与_taskcache_参考">23. Topic 与 TaskCache 参考</h2>
 <div class="sectionbody">
+<div class="paragraph">
+<p>本章整理 WebSocket 实时数据通道可订阅的 Topic 及其数据形态。每个 Topic 的「内容说明」与「示例消费方式」均取自示例工程 <code>urobot-sdk-example</code>（后端 <code>RobotRealtimeService</code> 通过 SDK 订阅 → 桥接给浏览器，前端 <code>useRobotWorkbench</code> 解析渲染），可作为实际接入的参考实现。</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>本章区分两类信息：</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>SDK 行为</strong>：<code>RobotRealtimeClient</code> / <code>TopicData</code> / <code>TaskCache</code> 等 SDK 自身能力，所有调用方一致。</p>
+</li>
+<li>
+<p><strong>示例做法</strong>：<code>urobot-sdk-example</code> 在 SDK 之上自行设计的「浏览器实时桥」约定（如二进制节流、帧格式、rosbridge 信封解析），属于应用层选择，<strong>不是 SDK 协议的一部分</strong>，仅供参考。</p>
+</li>
+</ul>
+</div>
+</td>
+</tr>
+</table>
+</div>
 <div class="sect2">
 <h3 id="_topic_列表">23.1. Topic 列表</h3>
 <div class="paragraph">
-<p>SDK 预定义的 Topic 常量（<code>Topics</code> 类），用户也可订阅任意自定义 Topic。</p>
+<p>SDK 预定义的 Topic 常量（<code>Topics</code> 类），用户也可订阅任意自定义 Topic 字符串。<code>Topics.ROBOT_UPLOAD_INFO</code> 无 <code>/</code> 前缀，其余均为 ROS 风格的带斜杠 Topic 名。</p>
 </div>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
 <col style="width: 25%;">
-<col style="width: 50%;">
 <col style="width: 25%;">
+<col style="width: 12.5%;">
+<col style="width: 37.5%;">
 </colgroup>
 <thead>
 <tr>
 <th class="tableblock halign-left valign-top">常量</th>
 <th class="tableblock halign-left valign-top">Topic 字符串</th>
-<th class="tableblock halign-left valign-top">典型数据格式</th>
+<th class="tableblock halign-left valign-top">数据形态</th>
+<th class="tableblock halign-left valign-top">内容说明</th>
 </tr>
 </thead>
 <tbody>
@@ -879,47 +919,322 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.CMD_VEL_ROBOT</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/cmd_vel_robot</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JSON</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">机器人速度指令（线速度 / 角速度），用于实时观测底盘运动。</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.CURRENT_POINTCLOUD</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/x_nav/current_pointcloud</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">binary</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">实时点云。高频、数据量大，示例工程作为「渲染类 Topic」处理（见下文）。</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.FILTERED_TF</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/filtered_tf</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JSON / binary</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">过滤后的 TF 坐标变换数据，用于定位 / 位姿。</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.GOAL_PATH</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/x_nav/goal_path</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JSON / binary</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">导航全局路径（规划的完整路径）。</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.LOCAL_PATH</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/x_nav/local_path</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JSON / binary</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">导航局部路径（局部避障的短期路径）。</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.CAMERA_IMAGE_WEBP</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/camera/color/image_raw/compressed/webp</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">binary (WebP)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">相机彩色画面，WebP 压缩。高频，示例工程作为「渲染类 Topic」处理。</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.ARM_LOW_STATE</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/g1_arm/low_state</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JSON / binary</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">机械臂关节底层状态。</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>Topics.ROBOT_UPLOAD_INFO</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>robot_upload_info</code></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JSON</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">机器人聚合上报信息（电量、终端状态、充电状态、位姿等）。示例工程在连接成功后默认订阅，详见下文。</p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <div class="sect2">
-<h3 id="_wsconfiguration_参数">23.2. WsConfiguration 参数</h3>
+<h3 id="_topic_数据形态与消费方式">23.2. Topic 数据形态与消费方式</h3>
+<div class="paragraph">
+<p>每次推送通过 <code>TopicData</code> 传递，<strong>同一条消息可同时承载 JSON 文本与二进制数据</strong>：</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>topic()</code> — Topic 名称</p>
+</li>
+<li>
+<p><code>jsonData()</code> — JSON 文本（可能为 null），<code>hasJson()</code> 判断是否非空</p>
+</li>
+<li>
+<p><code>binaryData()</code> — 二进制数据（可能为 null），<code>hasBinary()</code> 判断是否非空</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>订阅示例（SDK）：</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">realtime.onTopic(Topics.CMD_VEL_ROBOT, data -&gt; {
+    if (data.hasJson()) {
+        System.out.println("速度数据: " + data.jsonData());
+    }
+});
+
+realtime.onTopic(Topics.CURRENT_POINTCLOUD, data -&gt; {
+    if (data.hasBinary()) {
+        byte[] pointcloud = data.binaryData(); // 处理点云二进制
+    }
+});</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>同一 Topic 重复 <code>onTopic()</code> 时新回调替换旧回调；<code>unsubscribe(topic)</code> 取消订阅；重连后 SDK 自动重订阅所有已注册 Topic。</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_robot_upload_info_快照_2">23.3. robot_upload_info 快照</h3>
+<div class="paragraph">
+<p><code>robot_upload_info</code> 是机器人状态聚合 Topic。订阅后 SDK 自动维护最新 JSON 快照，可随时通过 <code>realtime.getRobotInfo()</code> 获取（未收到时返回 null）。</p>
+</div>
+<div class="paragraph">
+<p>示例工程在 <code>RobotRealtimeService.connect()</code> 中连接成功后<strong>默认订阅</strong> <code>robot_upload_info</code>，并将其推送给浏览器驱动状态卡片。前端 <code>mergeRuntimeWithRobotInfo()</code> 从该 JSON 中按多组候选字段名兜底解析以下信息（不同平台版本字段名可能不同，故做多名兼容）：</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 37.5%;">
+<col style="width: 37.5%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">业务含义</th>
+<th class="tableblock halign-left valign-top">候选字段名</th>
+<th class="tableblock halign-left valign-top">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">电量</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>soc</code> / <code>battery</code> / <code>battery_soc</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">电池电量百分比</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">终端状态</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>terminal_status</code> / <code>terminalStatus</code> / <code>status</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">机器人终端运行状态</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">充电状态</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>charge</code> / <code>charge_status</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">充电状态码</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">位姿</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>pose</code> / <code>odom.pose</code> / <code>ros_odom.pose</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">内含 <code>position{x,y,z}</code> 与 <code>orientation{x,y,z,w}</code>，用于在三维场景中定位机器人</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>字段名兼容是示例工程的防御式做法：推送格式可能随平台版本扩展，建议解析失败时仍透传原始 JSON，不要因单个字段缺失而中断。</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_渲染类高频_topic点云_相机">23.4. 渲染类高频 Topic（点云 / 相机）</h3>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>本节描述的二进制转发、节流（throttleRate / fps）、帧格式、rosbridge 信封解析均为示例工程「浏览器实时桥」的应用层约定，<strong>非 SDK 协议</strong>。直接使用 SDK 时，<code>TopicData</code> 已提供原始 JSON 与二进制，是否降采样、如何解析由调用方自行决定。</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>点云与相机数据高频且体量大。示例工程将其归为「渲染类 Topic」，与普通摘要类 Topic 区别处理。其订阅目录（前端 <code>realtimeTopicCatalog</code>）：</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 37.5%;">
+<col style="width: 25%;">
+<col style="width: 12.5%;">
+<col style="width: 25%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Topic</th>
+<th class="tableblock halign-left valign-top">默认节流间隔</th>
+<th class="tableblock halign-left valign-top">默认帧率</th>
+<th class="tableblock halign-left valign-top">可调帧率范围</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/x_nav/current_pointcloud</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">333 ms</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3 fps</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1 ~ 10 fps</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/camera/color/image_raw/compressed/webp</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">200 ms</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">5 fps</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1 ~ 15 fps</p></td>
+</tr>
+</tbody>
+</table>
+<div class="sect3">
+<h4 id="_节流降采样">23.4.1. 节流（降采样）</h4>
+<div class="paragraph">
+<p>示例后端 <code>RobotRealtimeService</code> 按订阅时携带的 <code>throttleRate</code>（毫秒）做时间窗口节流：距上次转发不足 <code>throttleRate</code> 的二进制帧直接丢弃，避免压垮浏览器。<code>fps = 1000 / throttleRate</code>。</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_浏览器二进制帧格式">23.4.2. 浏览器二进制帧格式</h4>
+<div class="paragraph">
+<p>示例后端转发给浏览器的二进制帧采用「Topic 头 + 载荷」结构，便于前端识别来源 Topic：</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>[ uint16 topicLength (大端) ][ topic UTF-8 字节 ][ 原始二进制载荷 ]</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>前端 <code>decodeBinaryFrame()</code> 据此切分出 <code>topic</code> 与 <code>data</code>。</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_rosbridge_信封">23.4.3. rosbridge 信封</h4>
+<div class="paragraph">
+<p>渲染类 Topic 若以 JSON 形式下发，外层是 rosbridge 风格信封，真正消息体在 <code>msg</code> 字段中，点云 / 图像的实际数据通常以 base64 放在 <code>msg.data</code>：</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-json hljs" data-lang="json">{ "topic": "/x_nav/current_pointcloud", "msg": { "data": "&lt;base64...&gt;", "...": "..." } }</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_任务结果推送task_reply">23.5. 任务结果推送（task_reply）</h3>
+<div class="paragraph">
+<p>OpenAPI 任务的实时状态通过任务结果通道推送，注册 <code>onTaskResult</code> 回调接收。SDK 内部会从推送 JSON 中解析 <code>taskId</code>、<code>taskStatus</code> 并更新 <code>TaskCache</code>。</p>
+</div>
+<div class="paragraph">
+<p>示例前端在解析 <code>task_reply</code> 时对字段名做了兜底兼容：</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>任务 ID：<code>task_id</code> / <code>taskId</code> / <code>taskID</code></p>
+</li>
+<li>
+<p>任务状态：<code>task_status</code> / <code>taskStatus</code> / <code>status</code></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">realtime.onTaskResult(data -&gt; {
+    System.out.println("任务结果: " + data.jsonData());
+});</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>任务下发后通过 <code>task_reply</code> 实时跟踪状态流转，直至到达终态（如 <code>completed</code> / <code>failed</code> / <code>canceled</code> / <code>timeout</code>）。</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_连接状态">23.6. 连接状态</h3>
+<div class="paragraph">
+<p>示例工程将 SDK 连接事件归一化为以下状态供前端展示：</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 66.6667%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">状态</th>
+<th class="tableblock halign-left valign-top">触发时机</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>DISCONNECTED</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">未连接 / 主动关闭</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>CONNECTING</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">正在建立连接</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>CONNECTED</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>onConnected</code> 回调触发</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>RECONNECTING</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>onDisconnected</code> 原因为 <code>NETWORK_ERROR</code> 或 <code>HEARTBEAT_TIMEOUT</code>（SDK 后台重连中）</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>KICKED</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>onKicked</code> 触发，被其他客户端挤占，<strong>不自动重连</strong></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>ERROR</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">连接 / 订阅过程中出现异常</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+<div class="paragraph">
+<p><code>onDisconnected(DisconnectReason)</code> 的原因枚举决定状态归一：<code>NETWORK_ERROR</code> / <code>HEARTBEAT_TIMEOUT</code> 归入 <code>RECONNECTING</code>（SDK 会自动重连），其余原因（如重连次数耗尽 <code>EXHAUSTED</code>）归入 <code>DISCONNECTED</code>。</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_wsconfiguration_参数">23.7. WsConfiguration 参数</h3>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
 <col style="width: 25%;">
@@ -968,7 +1283,7 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 </table>
 </div>
 <div class="sect2">
-<h3 id="_taskcache_行为">23.3. TaskCache 行为</h3>
+<h3 id="_taskcache_行为">23.8. TaskCache 行为</h3>
 <div class="ulist">
 <ul>
 <li>
@@ -984,7 +1299,7 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 <p><code>getStatus(taskId)</code> 返回任务状态字符串。</p>
 </li>
 <li>
-<p>TaskCache 为最佳努力缓存，<strong>以 HTTP <code>getTaskResult()</code> 为权威</strong>。</p>
+<p>TaskCache 缓存，由 <code>task_reply</code> 推送实时更新。</p>
 </li>
 <li>
 <p>LRU 淘汰：条目数达到 <code>taskCacheMaxSize</code> 时淘汰最久未访问的条目。</p>
@@ -1043,7 +1358,7 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2026-06-11 11:36:00 +0800
+Last updated 2026-06-16 13:55:56 +0800
 </div>
 </div>
 <script src="assets/highlight.js/highlight.min.js"></script>

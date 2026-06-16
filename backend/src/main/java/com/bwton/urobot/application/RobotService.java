@@ -4,8 +4,8 @@ import com.bwton.urobot.infrastructure.lang.Page;
 import com.bwton.urobot.infrastructure.lang.PageQuery;
 import com.bwton.urobot.interfaces.request.SendCommandBody;
 import com.bwton.urobot.interfaces.response.RobotResponse;
-import com.bwton.utwin.opensdk.services.UTwinClient;
-import com.bwton.utwin.opensdk.services.robot.model.*;
+import io.github.bwtrobot.opensdk.services.URobotClient;
+import io.github.bwtrobot.opensdk.services.robot.model.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -19,11 +19,11 @@ import java.util.stream.Collectors;
 
 @Service
 public class RobotService {
-    private final UTwinClient uTwinClient;
+    private final URobotClient uRobotClient;
     private final RobotRealtimeService realtimeService;
 
-    public RobotService(UTwinClient uTwinClient, RobotRealtimeService realtimeService) {
-        this.uTwinClient = uTwinClient;
+    public RobotService(URobotClient uRobotClient, RobotRealtimeService realtimeService) {
+        this.uRobotClient = uRobotClient;
         this.realtimeService = realtimeService;
     }
 
@@ -33,7 +33,7 @@ public class RobotService {
                     .pageSize(query.getPageSize())
                     .pageNum(query.getPageNo())
                     .build();
-            ListRobotsResponse listRobotsResponse = uTwinClient.robot().listRobots(request);
+            ListRobotsResponse listRobotsResponse = uRobotClient.robot().listRobots(request);
             return listRobotsResponse;
         }).map(response -> {
             List<RobotItem> list = response.data();
@@ -54,7 +54,7 @@ public class RobotService {
             GetRobotRuntimeRequest request = GetRobotRuntimeRequest.builder()
                     .robotId(robotId)
                     .build();
-            return uTwinClient.robot().getRobotRuntime(request).runtime();
+            return uRobotClient.robot().getRobotRuntime(request).runtime();
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -69,13 +69,13 @@ public class RobotService {
                 requestBody.put("callbackUrl", body.getCallbackUrl());
             }
 
-            SendCommandResponse response = uTwinClient.httpClient().post(
+            SendCommandResponse response = uRobotClient.httpClient().post(
                     "/robot/command/" + robotId,
                     Collections.emptyMap(),
                     requestBody,
                     SendCommandResponse.class,
-                    uTwinClient.tokenManager(),
-                    uTwinClient.retryPolicy());
+                    uRobotClient.tokenManager(),
+                    uRobotClient.retryPolicy());
             String taskId = response.taskId();
             // 指令仍走现有 HTTP 直传路径；若实时通道已连接，手动注册 taskId 以接入 TASK_REPLY 推送。
             realtimeService.registerTask(robotId, taskId);
@@ -114,7 +114,7 @@ public class RobotService {
                     .robotId(robotId)
                     .taskIds(taskIds)
                     .build();
-            List<TaskReply> replies = uTwinClient.robot().getTaskResult(request).data();
+            List<TaskReply> replies = uRobotClient.robot().getTaskResult(request).data();
             return replies.stream().map(this::taskReplyToMap).collect(Collectors.toList());
         }).subscribeOn(Schedulers.boundedElastic());
     }

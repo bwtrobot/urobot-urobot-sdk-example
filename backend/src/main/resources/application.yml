@@ -1,19 +1,19 @@
 server:
   port: 8080
 
-utwin:
-  access-key: ${UTWIN_ACCESS_KEY:}
-  secret-key: ${UTWIN_SECRET_KEY:}
-  endpoint: ${UTWIN_ENDPOINT:https://dev.bwton.cn/cps-dev01}
+urobot:
+  access-key: ${UROBOT_ACCESS_KEY:}
+  secret-key: ${UROBOT_SECRET_KEY:}
+  endpoint: ${UROBOT_ENDPOINT:https://dev.bwton.cn/cps-dev01}
   ws:
-    enabled: ${UTWIN_WS_ENABLED:true}
-    max-reconnect-attempts: ${UTWIN_WS_MAX_RECONNECT_ATTEMPTS:3}
-    reconnect-interval: ${UTWIN_WS_RECONNECT_INTERVAL:5s}
-    heartbeat-interval: ${UTWIN_WS_HEARTBEAT_INTERVAL:30s}
-    connect-timeout: ${UTWIN_WS_CONNECT_TIMEOUT:10s}
-    task-cache-max-size: ${UTWIN_WS_TASK_CACHE_MAX_SIZE:1000}
-    task-cache-ttl: ${UTWIN_WS_TASK_CACHE_TTL:1h}
+    enabled: ${UROBOT_WS_ENABLED:true}
+    max-reconnect-attempts: ${UROBOT_WS_MAX_RECONNECT_ATTEMPTS:3}
+    reconnect-interval: ${UROBOT_WS_RECONNECT_INTERVAL:5s}
+    heartbeat-interval: ${UROBOT_WS_HEARTBEAT_INTERVAL:30s}
+    connect-timeout: ${UROBOT_WS_CONNECT_TIMEOUT:10s}
+    task-cache-max-size: ${UROBOT_WS_TASK_CACHE_MAX_SIZE:1000}
+    task-cache-ttl: ${UROBOT_WS_TASK_CACHE_TTL:1h}
 logging:
   level:
     root: INFO
-    com.bwton.utwin: DEBUG
+    io.github.bwtrobot: DEBUG

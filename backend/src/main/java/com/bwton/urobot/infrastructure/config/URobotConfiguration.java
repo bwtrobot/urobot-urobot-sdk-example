@@ -1,9 +1,9 @@
 package com.bwton.urobot.infrastructure.config;
 
-import com.bwton.utwin.opensdk.core.auth.AccessKeyCredentials;
-import com.bwton.utwin.opensdk.core.auth.CredentialsProvider;
-import com.bwton.utwin.opensdk.services.UTwinClient;
-import com.bwton.utwin.opensdk.ws.config.WsConfiguration;
+import io.github.bwtrobot.opensdk.core.auth.AccessKeyCredentials;
+import io.github.bwtrobot.opensdk.core.auth.CredentialsProvider;
+import io.github.bwtrobot.opensdk.services.URobotClient;
+import io.github.bwtrobot.opensdk.ws.config.WsConfiguration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -14,31 +14,31 @@ import java.time.Duration;
 @Configuration
 public class URobotConfiguration {
 
-    @Value("${utwin.access-key}")
+    @Value("${urobot.access-key}")
     private String accessKey;
-    @Value("${utwin.secret-key}")
+    @Value("${urobot.secret-key}")
     private String secretKey;
-    @Value("${utwin.endpoint}")
+    @Value("${urobot.endpoint}")
     private String endpoint;
-    @Value("${utwin.ws.enabled:true}")
+    @Value("${urobot.ws.enabled:true}")
     private boolean wsEnabled;
-    @Value("${utwin.ws.max-reconnect-attempts:3}")
+    @Value("${urobot.ws.max-reconnect-attempts:3}")
     private int maxReconnectAttempts;
-    @Value("${utwin.ws.reconnect-interval:5s}")
+    @Value("${urobot.ws.reconnect-interval:5s}")
     private Duration reconnectInterval;
-    @Value("${utwin.ws.heartbeat-interval:30s}")
+    @Value("${urobot.ws.heartbeat-interval:30s}")
     private Duration heartbeatInterval;
-    @Value("${utwin.ws.connect-timeout:10s}")
+    @Value("${urobot.ws.connect-timeout:10s}")
     private Duration connectTimeout;
-    @Value("${utwin.ws.task-cache-max-size:1000}")
+    @Value("${urobot.ws.task-cache-max-size:1000}")
     private int taskCacheMaxSize;
-    @Value("${utwin.ws.task-cache-ttl:1h}")
+    @Value("${urobot.ws.task-cache-ttl:1h}")
     private Duration taskCacheTtl;
 
     @Bean
-    public UTwinClient uTwinClient() {
+    public URobotClient uRobotClient() {
         CredentialsProvider provider = () -> AccessKeyCredentials.of(accessKey, secretKey);
-        UTwinClient.Builder builder = UTwinClient.builder()
+        URobotClient.Builder builder = URobotClient.builder()
                 .credentialsProvider(provider)
                 .endpoint(endpoint);
 

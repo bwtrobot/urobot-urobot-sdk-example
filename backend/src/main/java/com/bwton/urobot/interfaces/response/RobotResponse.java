@@ -1,6 +1,6 @@
 package com.bwton.urobot.interfaces.response;
 
-import com.bwton.utwin.opensdk.services.robot.model.RobotItem;
+import io.github.bwtrobot.opensdk.services.robot.model.RobotItem;
 
 import java.util.Map;
 
