@@ -2,6 +2,7 @@ package com.bwton.urobot.application;
 
 import com.bwton.urobot.infrastructure.lang.Page;
 import com.bwton.urobot.infrastructure.lang.PageQuery;
+import com.bwton.urobot.interfaces.request.ControlNarrationBody;
 import com.bwton.urobot.interfaces.request.SendCommandBody;
 import com.bwton.urobot.interfaces.response.RobotResponse;
 import io.github.bwtrobot.opensdk.services.URobotClient;
@@ -10,21 +11,22 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @Service
 public class RobotService {
     private final URobotClient uRobotClient;
-    private final RobotRealtimeService realtimeService;
 
-    public RobotService(URobotClient uRobotClient, RobotRealtimeService realtimeService) {
+    public RobotService(URobotClient uRobotClient) {
         this.uRobotClient = uRobotClient;
-        this.realtimeService = realtimeService;
     }
 
     public Mono<Page<RobotResponse>> page(PageQuery query) {
@@ -61,25 +63,16 @@ public class RobotService {
     public Mono<String> sendCommand(String robotId, SendCommandBody body) {
         return Mono.fromSupplier(() -> {
             Map<String, Object> params = normalizeCommandParams(body.getParams());
-            Map<String, Object> requestBody = new LinkedHashMap<>();
-            requestBody.put("type", body.getType());
-            requestBody.put("messagesType", normalizeMessagesType(body.getMessagesType()));
-            requestBody.put("params", params);
+            SendCommandRequest.Builder builder = SendCommandRequest.builder()
+                    .robotId(robotId)
+                    .type(body.getType())
+                    .messagesType(normalizeMessagesType(body.getMessagesType()))
+                    .params(params);
             if (body.getCallbackUrl() != null && !body.getCallbackUrl().trim().isEmpty()) {
-                requestBody.put("callbackUrl", body.getCallbackUrl());
+                builder.callbackUrl(body.getCallbackUrl());
             }
 
-            SendCommandResponse response = uRobotClient.httpClient().post(
-                    "/robot/command/" + robotId,
-                    Collections.emptyMap(),
-                    requestBody,
-                    SendCommandResponse.class,
-                    uRobotClient.tokenManager(),
-                    uRobotClient.retryPolicy());
-            String taskId = response.taskId();
-            // 指令仍走现有 HTTP 直传路径；若实时通道已连接，手动注册 taskId 以接入 TASK_REPLY 推送。
-            realtimeService.registerTask(robotId, taskId);
-            return taskId;
+            return uRobotClient.robot().sendCommand(builder.build()).taskId();
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -119,6 +112,68 @@ public class RobotService {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
+    public Mono<Map<String, Object>> controlNarration(String robotId, ControlNarrationBody body) {
+        return Mono.fromSupplier(() -> {
+            validateControlNarrationBody(body);
+            // 将前端选择的流程和节点上下文原样交给 SDK，由 SDK 负责实际讲解控制协议。
+            ControlNarrationRequest request = ControlNarrationRequest.builder()
+                    .robotId(robotId)
+                    .editionId(body.getEditionId())
+                    .processId(body.getProcessId())
+                    .processName(body.getProcessName())
+                    .command(body.getCommand())
+                    .operationSource(body.getOperationSource())
+                    .nodeId(body.getNodeId())
+                    .nodeName(body.getNodeName())
+                    .build();
+            return controlNarrationToMap(uRobotClient.robot().controlNarration(request));
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<List<Map<String, Object>>> getNarrationRuntime(String robotId) {
+        return Mono.fromSupplier(() -> {
+            GetNarrationRuntimeRequest request = GetNarrationRuntimeRequest.builder()
+                    .robotId(robotId)
+                    .build();
+            List<NarrationRuntime> runtimes = uRobotClient.robot().getNarrationRuntime(request).runtimes();
+            if (runtimes == null) {
+                return Collections.<Map<String, Object>>emptyList();
+            }
+            return runtimes.stream().map(this::narrationRuntimeToMap).collect(Collectors.toList());
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    // 查询机器人关联的地图列表
+    public Mono<List<Map<String, Object>>> listRobotMaps(String robotId) {
+        return Mono.fromSupplier(() -> {
+            ListRobotMapsRequest request = ListRobotMapsRequest.builder()
+                    .robotId(robotId)
+                    .build();
+            List<RobotMap> maps = uRobotClient.robot().listRobotMaps(request).data();
+            if (maps == null) {
+                return Collections.<Map<String, Object>>emptyList();
+            }
+            return maps.stream().map(item -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", item.id());
+                m.put("name", item.name());
+                m.put("createTime", item.createTime());
+                return m;
+            }).collect(Collectors.toList());
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<String> activateMap(String robotId, String editionId) {
+        return Mono.fromSupplier(() -> {
+            requireText(editionId, "editionId");
+            ActivateMapRequest request = ActivateMapRequest.builder()
+                    .robotId(robotId)
+                    .editionId(editionId)
+                    .build();
+            return uRobotClient.robot().activateMap(request).taskId();
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
     private Map<String, Object> taskReplyToMap(TaskReply reply) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("task_id", reply.taskId());
@@ -135,6 +190,101 @@ public class RobotService {
                 return cmdMap;
             }).collect(Collectors.toList()));
         }
+        return map;
+    }
+
+    private Map<String, Object> controlNarrationToMap(ControlNarrationResponse response) {
+        return narrationRuntimeFieldsToMap(response);
+    }
+
+    private Map<String, Object> narrationRuntimeToMap(NarrationRuntime runtime) {
+        return narrationRuntimeFieldsToMap(runtime);
+    }
+
+    private Map<String, Object> narrationRuntimeFieldsToMap(Object source) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        Arrays.stream(source.getClass().getMethods())
+                .filter(method -> method.getDeclaringClass().equals(source.getClass()))
+                .filter(method -> method.getParameterCount() == 0)
+                .filter(method -> !Void.TYPE.equals(method.getReturnType()))
+                .sorted(Comparator.comparing(Method::getName))
+                .forEach(method -> putRuntimeAccessorValue(map, source, method));
+        return map;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void putRuntimeAccessorValue(Map<String, Object> map, Object source, Method method) {
+        try {
+            Object value = method.invoke(source);
+            if ("nodes".equals(method.getName())) {
+                map.put(method.getName(), narrationNodesToList((List<NarrationNode>) value));
+                return;
+            }
+            if ("segments".equals(method.getName())) {
+                map.put(method.getName(), narrationSegmentsToList((List<NarrationSegment>) value));
+                return;
+            }
+            map.put(method.getName(), value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("讲解运行时字段转换失败: " + method.getName(), e);
+        }
+    }
+
+    private void validateControlNarrationBody(ControlNarrationBody body) {
+        if (body == null) {
+            throw new IllegalArgumentException("讲解控制请求体不能为空");
+        }
+        requireText(body.getEditionId(), "editionId");
+        requireText(body.getProcessId(), "processId");
+        requireText(body.getCommand(), "command");
+        if ("start".equals(body.getCommand())) {
+            requireText(body.getProcessName(), "processName");
+        }
+        if ("node-pick".equals(body.getCommand())) {
+            requireText(body.getNodeId(), "nodeId");
+            requireText(body.getNodeName(), "nodeName");
+        }
+    }
+
+    private void requireText(String value, String fieldName) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " 不能为空");
+        }
+    }
+
+    private List<Map<String, Object>> narrationNodesToList(List<NarrationNode> nodes) {
+        return nodes == null ? Collections.emptyList() : nodes.stream().map(this::narrationNodeToMap).collect(Collectors.toList());
+    }
+
+    private List<Map<String, Object>> narrationSegmentsToList(List<NarrationSegment> segments) {
+        return segments == null ? Collections.emptyList() : segments.stream().map(this::narrationSegmentToMap).collect(Collectors.toList());
+    }
+
+    private Map<String, Object> narrationNodeToMap(NarrationNode node) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("nodeIndex", node.nodeIndex());
+        map.put("nodeId", node.nodeId());
+        map.put("nodeName", node.nodeName());
+        map.put("status", node.status());
+        map.put("entranceScriptId", node.entranceScriptId());
+        map.put("entranceScriptName", node.entranceScriptName());
+        map.put("selfScriptId", node.selfScriptId());
+        map.put("selfScriptName", node.selfScriptName());
+        map.put("exitScriptId", node.exitScriptId());
+        map.put("exitScriptName", node.exitScriptName());
+        return map;
+    }
+
+    private Map<String, Object> narrationSegmentToMap(NarrationSegment segment) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("nodeIndex", segment.nodeIndex());
+        map.put("nodeId", segment.nodeId());
+        map.put("nodeName", segment.nodeName());
+        map.put("segmentType", segment.segmentType());
+        map.put("fromNodeId", segment.fromNodeId());
+        map.put("toNodeId", segment.toNodeId());
+        map.put("taskId", segment.taskId());
+        map.put("taskStatus", segment.taskStatus());
         return map;
     }
 }

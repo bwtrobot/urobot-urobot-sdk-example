@@ -3,6 +3,9 @@
 **语言** 中文
 **时区** 上海
 
+## 接口约定
+
+- 后端 Java 字段使用 camelCase，接口 JSON 字段默认使用 camelCase，需要兼容前端 snake_case 时再补充 @JsonAlias("snake_case")。
 
 ## 业务约定
 

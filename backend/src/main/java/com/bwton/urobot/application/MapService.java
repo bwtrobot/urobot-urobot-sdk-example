@@ -23,7 +23,7 @@ public class MapService {
         return Mono.fromSupplier(() -> {
             ListMapEditionsRequest req = ListMapEditionsRequest.builder()
                     .mapId(mapId).build();
-            List<MapEdition> editions = uRobotClient.map().listEditions(req).data();
+            List<MapEdition> editions = uRobotClient.map(). listEditions(req).data();
             return editions.stream().map(this::editionToMap).collect(Collectors.toList());
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -120,6 +120,30 @@ public class MapService {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
+    public Mono<List<Map<String, Object>>> listNarrationProcesses(String editionId) {
+        return Mono.fromSupplier(() -> {
+            ListNarrationProcessesRequest req = ListNarrationProcessesRequest.builder()
+                    .editionId(editionId)
+                    .build();
+            List<NarrationProcess> processes = uRobotClient.map().narration().listProcesses(req).data();
+            if (processes == null) {
+                return Collections.<Map<String, Object>>emptyList();
+            }
+            return processes.stream().map(this::narrationProcessToMap).collect(Collectors.toList());
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<Map<String, Object>> getNarrationProcessDetail(String editionId, String processId) {
+        return Mono.fromSupplier(() -> {
+            GetNarrationProcessDetailRequest req = GetNarrationProcessDetailRequest.builder()
+                    .editionId(editionId)
+                    .processId(processId)
+                    .build();
+            NarrationProcess process = uRobotClient.map().narration().getProcessDetail(req).process();
+            return process == null ? Collections.<String, Object>emptyMap() : narrationProcessToMap(process);
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
     private Map<String, Object> editionToMap(MapEdition e) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", e.id());
@@ -206,6 +230,32 @@ public class MapService {
                 return em;
             }).collect(Collectors.toList()));
         }
+        return m;
+    }
+
+    private Map<String, Object> narrationProcessToMap(NarrationProcess process) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", process.id());
+        m.put("uuid", process.uuid() == null ? null : process.uuid().toString());
+        m.put("name", process.name());
+        m.put("navPathId", process.navPathId());
+        m.put("navPathName", process.navPathName());
+        m.put("valid", process.valid());
+        m.put("nodes", process.nodes() == null
+                ? Collections.emptyList()
+                : process.nodes().stream().map(this::narrationProcessNodeToMap).collect(Collectors.toList()));
+        return m;
+    }
+
+    private Map<String, Object> narrationProcessNodeToMap(NarrationProcessNode node) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", node.id());
+        m.put("uuid", node.uuid() == null ? null : node.uuid().toString());
+        m.put("name", node.name());
+        m.put("navNodeId", node.navNodeId());
+        m.put("order", node.order());
+        m.put("position", node.position());
+        m.put("rotation", node.rotation());
         return m;
     }
 }

@@ -1,7 +1,10 @@
 import type {
   MapEdition,
+  MapItem,
   MapPoint,
   NavigationPath,
+  NarrationProcessSummary,
+  NarrationRuntimeInfo,
   PathNode,
   RobotRuntime,
   RobotSummary,
@@ -20,7 +23,7 @@ const baseNodes: PathNode[] = [
   {
     id: 'node-start',
     uuid: 'node-start',
-    name: 'Start',
+    name: '起点',
     order: 1,
     position: { x: 0, y: 0, z: 0 },
     orientation: identityOrientation,
@@ -28,7 +31,7 @@ const baseNodes: PathNode[] = [
   {
     id: 'node-inspection',
     uuid: 'node-inspection',
-    name: 'Inspection Point',
+    name: '巡检点',
     order: 2,
     position: { x: 4.2, y: 1.1, z: 0 },
     orientation: identityOrientation,
@@ -36,7 +39,7 @@ const baseNodes: PathNode[] = [
   {
     id: 'node-dock',
     uuid: 'node-dock',
-    name: 'Charging Dock',
+    name: '充电桩',
     order: 3,
     position: { x: 8.4, y: -1.5, z: 0 },
     orientation: identityOrientation,
@@ -50,6 +53,11 @@ function clonePathNodes(): PathNode[] {
     orientation: node.orientation ? { ...node.orientation } : undefined,
   }));
 }
+
+export const mockMaps: MapItem[] = [
+  { id: 'map-main', name: 'Main Facility', createTime: '2026-01-15T08:00:00.000Z' },
+  { id: 'map-lab', name: '仿真实验室', createTime: '2026-03-10T10:30:00.000Z' },
+];
 
 export const mockRobots: RobotSummary[] = [
   {
@@ -228,6 +236,47 @@ export const mockTopologyPath: TopologyPath = {
     },
   ],
 };
+
+export const mockNarrationProcesses: NarrationProcessSummary[] = [
+  {
+    id: 'narration-main-route',
+    uuid: 'narration-main-route',
+    name: '主路线讲解',
+    navPathId: 'nav-path-main',
+    navPathName: 'Main Inspection Route',
+    valid: true,
+    nodes: clonePathNodes().map((node) => ({
+      id: node.id,
+      uuid: node.uuid,
+      name: node.name,
+      navNodeId: node.id,
+      order: node.order,
+      position: node.position,
+      rotation: node.orientation,
+    })),
+  },
+];
+
+export const mockNarrationRuntime: NarrationRuntimeInfo[] = [
+  {
+    robotId: 'robot-alpha',
+    editionId: 'edition-main-v1',
+    processId: 'narration-main-route',
+    processName: '主路线讲解',
+    command: 'start',
+    status: 'idle',
+    operationSource: 'web-example',
+    currentNodeIndex: 0,
+    currentNodeId: 'node-start',
+    currentNodeName: '起点',
+    nodes: [
+      { nodeIndex: 0, nodeId: 'node-start', nodeName: '起点', status: 'pending' },
+      { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', status: 'pending' },
+      { nodeIndex: 2, nodeId: 'node-dock', nodeName: '充电桩', status: 'pending' },
+    ],
+    updateTime: new Date().toISOString(),
+  },
+];
 
 export function createMockTaskResult(taskId: string): TaskResult {
   return {

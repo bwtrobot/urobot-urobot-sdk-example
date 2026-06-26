@@ -5,6 +5,8 @@ import com.bwton.urobot.application.RobotRealtimeService;
 import com.bwton.urobot.infrastructure.lang.Page;
 import com.bwton.urobot.infrastructure.lang.PageQuery;
 import com.bwton.urobot.infrastructure.lang.Result;
+import com.bwton.urobot.interfaces.request.ActivateMapBody;
+import com.bwton.urobot.interfaces.request.ControlNarrationBody;
 import com.bwton.urobot.interfaces.request.SendCommandBody;
 import com.bwton.urobot.interfaces.response.RealtimeSnapshot;
 import com.bwton.urobot.interfaces.response.RobotResponse;
@@ -57,6 +59,28 @@ public class RobotHandler {
             }
         });
         return service.getTaskResult(robotId, taskIds).map(Result::ok);
+    }
+
+    @PostMapping("{robotId}/narration/control")
+    public Mono<Result<Map<String, Object>>> controlNarration(
+            @PathVariable String robotId,
+            @RequestBody ControlNarrationBody body) {
+        return service.controlNarration(robotId, body).map(Result::ok);
+    }
+
+    @GetMapping("{robotId}/narration/runtime")
+    public Mono<Result<List<Map<String, Object>>>> narrationRuntime(@PathVariable String robotId) {
+        return service.getNarrationRuntime(robotId).map(Result::ok);
+    }
+
+    @GetMapping("{robotId}/maps")
+    public Mono<Result<List<Map<String, Object>>>> listRobotMaps(@PathVariable String robotId) {
+        return service.listRobotMaps(robotId).map(Result::ok);
+    }
+
+    @PostMapping("{robotId}/activate-map")
+    public Mono<Result<String>> activateMap(@PathVariable String robotId, @RequestBody ActivateMapBody body) {
+        return service.activateMap(robotId, body.getEditionId()).map(Result::ok);
     }
 
     @GetMapping("realtime/{robotId}/snapshot")

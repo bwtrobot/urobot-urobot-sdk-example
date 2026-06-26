@@ -47,4 +47,16 @@ public class MapHandler {
             @ModelAttribute PageQuery pageQuery) {
         return mapService.listTopoPaths(editionId, pageQuery).map(Result::ok);
     }
+
+    @GetMapping("edition/{editionId}/narration-processes")
+    public Mono<Result<List<Map<String, Object>>>> narrationProcesses(@PathVariable String editionId) {
+        return mapService.listNarrationProcesses(editionId).map(Result::ok);
+    }
+
+    @GetMapping("edition/{editionId}/narration-process-detail")
+    public Mono<Result<Map<String, Object>>> narrationProcessDetail(
+            @PathVariable String editionId,
+            @RequestParam String processId) {
+        return mapService.getNarrationProcessDetail(editionId, processId).map(Result::ok);
+    }
 }

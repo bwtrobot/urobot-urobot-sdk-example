@@ -1,6 +1,7 @@
 import type { AxiosAdapter } from 'axios';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  activateMap,
   buildCommandPayload,
   getRobotRuntime,
   getTaskResults,
@@ -219,6 +220,85 @@ describe('robotApi', () => {
       data: payload.params.task_id,
       source: 'mock',
     });
+  });
+
+  it('activates map through robot path variable endpoint with edition id in request body', async () => {
+    http.defaults.adapter = vi.fn(async (config) => ({
+      data: { result: 'task-activate' },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })) as AxiosAdapter;
+
+    const result = await activateMap('robot-alpha', 'edition-main-v2');
+
+    expect(http.defaults.adapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'post',
+        url: '/robot/robot-alpha/activate-map',
+      }),
+    );
+    const sentConfig = vi.mocked(http.defaults.adapter).mock.calls[0][0];
+    expect(JSON.parse(String(sentConfig.data))).toEqual({ editionId: 'edition-main-v2' });
+    expect(result).toEqual({ data: 'task-activate', source: 'real' });
+  });
+
+  it('controls narration with required edition context in request body', async () => {
+    http.defaults.adapter = vi.fn(async (config) => ({
+      data: {
+        result: {
+          accepted: true,
+          editionId: 'edition-main-v1',
+          processId: 'process-1',
+          command: 'start',
+        },
+      },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })) as AxiosAdapter;
+
+    const { controlNarration } = await import('./robotApi');
+    const result = await controlNarration('robot-alpha', {
+      editionId: 'edition-main-v1',
+      processId: 'process-1',
+      processName: '讲解流程',
+      command: 'start',
+      operationSource: 'web-example',
+    });
+
+    const sentConfig = vi.mocked(http.defaults.adapter).mock.calls[0][0];
+    expect(sentConfig.url).toBe('/robot/robot-alpha/narration/control');
+    expect(JSON.parse(String(sentConfig.data))).toMatchObject({
+      editionId: 'edition-main-v1',
+      processId: 'process-1',
+      command: 'start',
+    });
+    expect(result.data).toMatchObject({
+      accepted: true,
+      editionId: 'edition-main-v1',
+    });
+  });
+
+  it('rejects narration control before sending when edition or process context is missing', async () => {
+    http.defaults.adapter = vi.fn() as AxiosAdapter;
+    const { controlNarration } = await import('./robotApi');
+
+    await expect(controlNarration('robot-alpha', {
+      editionId: '',
+      processId: 'process-1',
+      command: 'start',
+    })).rejects.toThrow('editionId 不能为空');
+
+    await expect(controlNarration('robot-alpha', {
+      editionId: 'edition-main-v1',
+      processId: '',
+      command: 'start',
+    })).rejects.toThrow('processId 不能为空');
+
+    expect(http.defaults.adapter).not.toHaveBeenCalled();
   });
 
   it('requests task results with repeated taskIds query params and falls back per task', async () => {

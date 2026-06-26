@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getChargingPoints, getMapEdition, getMapEditions, listNavigationPaths, listTopologyPaths } from '../../../services/api/mapApi';
+import {
+  getChargingPoints,
+  getMapEdition,
+  getMapEditions,
+  listRobotMaps,
+  listNarrationProcesses,
+  listNavigationPaths,
+  listTopologyPaths,
+} from '../../../services/api/mapApi';
 import { threePositionToRos, threeQuaternionToRos } from '../../../shared/utils/pose';
 import { isRobotOffline } from '../../../shared/utils/robotStatus';
 import {
+  activateMap as activateMapApi,
   buildCommandPayload,
+  controlNarration as controlNarrationApi,
+  getNarrationRuntime,
   getRobotRuntime,
   getTaskResults,
   listRobots,
@@ -11,9 +22,14 @@ import {
   type RobotCommandCode,
 } from '../../../services/api/robotApi';
 import { createRealtimeClient, getRealtimeSnapshot, type RealtimeClient } from '../../../services/api/realtimeApi';
+import type { ApiRequestResult } from '../../../services/api/httpClient';
 import type {
   MapEdition,
+  MapItem,
   NavigationPath,
+  NarrationCommand,
+  NarrationProcessSummary,
+  NarrationRuntimeInfo,
   PathNode,
   RealtimeConnectionStatus,
   RealtimeEvent,
@@ -27,10 +43,15 @@ import type {
 
 // 任务终态集合，轮询到这些状态时停止
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'timeout', '完成', '失败', '已取消', '超时']);
+const RUNTIME_POLL_INTERVAL_MS = 3000;
+const NARRATION_RUNTIME_POLL_INTERVAL_MS = 10000;
+const TASK_RESULT_MAX_POLLS = 30;
+const TASK_RESULT_REALTIME_POLL_INTERVAL_MS = 5000;
+const TASK_RESULT_FALLBACK_POLL_INTERVAL_MS = 2000;
 
 export interface WorkbenchTask {
   taskId: string;
-  commandCode: RobotCommandCode;
+  commandCode: RobotCommandCode | 'activate_map';
   source: 'real' | 'mock';
   status: string;
   result?: TaskResult;
@@ -39,6 +60,8 @@ export interface WorkbenchTask {
   resultSummary?: string;
   compensationStatus?: 'idle' | 'polling' | 'done';
 }
+
+type WorkbenchTaskCommandCode = RobotCommandCode | 'activate_map';
 
 export type ActivePathType = 'nav' | 'topo';
 
@@ -69,6 +92,12 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
   const [edition, setEdition] = useState<MapEdition | undefined>();
   const [navPaths, setNavPaths] = useState<NavigationPath[]>([]);
   const [topoPaths, setTopoPaths] = useState<TopologyPath[]>([]);
+  const [allMaps, setAllMaps] = useState<MapItem[]>([]);
+  const [editionsMap, setEditionsMap] = useState<Record<string, MapEdition[]>>({});
+  const [switchingEditionId, setSwitchingEditionId] = useState<string | undefined>();
+  const [narrationProcesses, setNarrationProcesses] = useState<NarrationProcessSummary[]>([]);
+  const [selectedProcessId, setSelectedProcessId] = useState('');
+  const [narrationRuntime, setNarrationRuntime] = useState<NarrationRuntimeInfo[]>([]);
   const [tasks, setTasks] = useState<WorkbenchTask[]>([]);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeConnectionStatus>('DISCONNECTED');
   const [subscribedTopics, setSubscribedTopics] = useState<Set<string>>(new Set());
@@ -118,6 +147,39 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
       cancelled = true;
     };
   }, []);
+
+  // 加载机器人关联的地图列表及各地图的版本列表，供「地图切换」面板使用
+  useEffect(() => {
+    if (!selectedRobotId) {
+      setAllMaps([]);
+      setEditionsMap({});
+      return;
+    }
+    let cancelled = false;
+    void listRobotMaps(selectedRobotId).then(async (response) => {
+      if (cancelled) return;
+      const mapRows = response.data;
+      setAllMaps(mapRows);
+      // 单个地图版本列表失败不应阻断其他地图，避免切换面板长期停留在加载态
+      const editionResults = await Promise.all(
+        mapRows.map((m) =>
+          getMapEditions(m.id)
+            .then((r) => ({ mapId: m.id, editions: r.data }))
+            .catch((error) => {
+              console.warn('加载地图版本列表失败', m.id, error);
+              return { mapId: m.id, editions: [] as MapEdition[] };
+            }),
+        ),
+      );
+      if (cancelled) return;
+      const map: Record<string, MapEdition[]> = {};
+      for (const item of editionResults) {
+        map[item.mapId] = item.editions;
+      }
+      setEditionsMap(map);
+    });
+    return () => { cancelled = true; };
+  }, [selectedRobotId]);
 
   const selectedRobot = useMemo(
     () => robots.find((robot) => robot.id === selectedRobotId),
@@ -256,7 +318,7 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
         cancelled = true;
       };
     }
-    const timer = window.setInterval(refreshRuntime, 3000);
+    const timer = window.setInterval(refreshRuntime, RUNTIME_POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -283,9 +345,10 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
       const currentEdition = editionResponse.data[0];
       if (!currentEdition || cancelled) return;
 
-      const [navResponse, topoResponse] = await Promise.all([
+      const [navResponse, topoResponse, narrationResponse, chargingResponse] = await Promise.all([
         listNavigationPaths(currentEdition.id),
         listTopologyPaths(currentEdition.id),
+        listNarrationProcesses(currentEdition.id),
         getChargingPoints(currentEdition.id),
       ]);
 
@@ -293,12 +356,15 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
         setEdition(currentEdition);
         setNavPaths(navResponse.data.rows);
         setTopoPaths(topoResponse.data.rows);
+        setNarrationProcesses(narrationResponse.data);
         setDemoMode(
           (current) =>
             current ||
             editionResponse.source === 'mock' ||
             navResponse.source === 'mock' ||
-            topoResponse.source === 'mock',
+            topoResponse.source === 'mock' ||
+            narrationResponse.source === 'mock' ||
+            chargingResponse.source === 'mock',
         );
       }
     }
@@ -308,6 +374,15 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
       cancelled = true;
     };
   }, [selectedRobot, runtimeEditionId]);
+
+  // 讲解流程随地图版本变化，默认选中第一条可用流程；无流程时清理选择。
+  useEffect(() => {
+    setSelectedProcessId((current) => {
+      if (narrationProcesses.length === 0) return '';
+      if (narrationProcesses.find((process) => process.id === current)) return current;
+      return narrationProcesses[0].id;
+    });
+  }, [narrationProcesses]);
 
   // 当路径数据加载完成后，自动选中第一条路径；路径为空时清理选中状态
   useEffect(() => {
@@ -362,6 +437,39 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     pollingAbortRef.current = null;
   }, [selectedRobotId]);
 
+  const refreshNarrationRuntime = useCallback(async (isCancelled?: () => boolean) => {
+    if (!selectedRobotId) {
+      setNarrationRuntime([]);
+      return;
+    }
+    const response = await getNarrationRuntime(selectedRobotId);
+    if (isCancelled?.()) return;
+    setNarrationRuntime(response.data);
+    setDemoMode((current) => current || response.source === 'mock');
+  }, [selectedRobotId]);
+
+  useEffect(() => {
+    if (!selectedRobotId) {
+      setNarrationRuntime([]);
+      return;
+    }
+    let cancelled = false;
+
+    async function refresh() {
+      await refreshNarrationRuntime(() => cancelled);
+    }
+
+    void refresh();
+    const timer = window.setInterval(
+      () => void refresh().catch(() => {}),
+      NARRATION_RUNTIME_POLL_INTERVAL_MS,
+    );
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedRobotId, refreshNarrationRuntime]);
+
   const subscribeRealtimeTopic = useCallback((topic: string, options?: { binary?: boolean; throttleRate?: number }) => {
     realtimeClientRef.current?.subscribe([topic], options);
     setSubscribedTopics((current) => new Set(current).add(topic));
@@ -382,18 +490,15 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     setSubscribedTopics((current) => new Set(current).add(topic));
   }, []);
 
-  const sendCommand = useCallback(
-    async (commandCode: RobotCommandCode, commandParam: unknown) => {
-      if (!selectedRobotId) return;
-      const payload = buildCommandPayload(commandCode, commandParam);
-
-      // 取消前一个任务的轮询，避免并发轮询
+  const trackRobotTask = useCallback(
+    async (commandCode: WorkbenchTaskCommandCode, submit: () => Promise<ApiRequestResult<string>>, errorMessage: string) => {
+      if (!selectedRobotId) return false;
       pollingAbortRef.current?.abort();
       const abortController = new AbortController();
       pollingAbortRef.current = abortController;
 
       try {
-        const response = await sendRobotCommand(selectedRobotId, payload);
+        const response = await submit();
         const taskId = response.data;
         setDemoMode((current) => current || response.source === 'mock');
         setTasks((current) => [
@@ -410,9 +515,10 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
         ]);
 
         // HTTP 查询作为最终一致性补偿：实时已连接时降低频率，断线或 Mock 时保持原轮询频率。
-        const maxPolls = 30;
-        const pollInterval = realtimeStatus === 'CONNECTED' ? 5000 : 2000;
-        for (let i = 0; i < maxPolls; i++) {
+        const pollInterval = realtimeStatus === 'CONNECTED'
+          ? TASK_RESULT_REALTIME_POLL_INTERVAL_MS
+          : TASK_RESULT_FALLBACK_POLL_INTERVAL_MS;
+        for (let i = 0; i < TASK_RESULT_MAX_POLLS; i++) {
           if (abortController.signal.aborted) break;
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
           if (abortController.signal.aborted) break;
@@ -434,13 +540,99 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
           );
           if (TERMINAL_STATUSES.has(latestStatus)) break;
         }
+        return !abortController.signal.aborted;
       } catch (error) {
         if (!abortController.signal.aborted) {
-          console.error('发送命令失败', error);
+          console.error(errorMessage, error);
         }
+        return false;
       }
     },
     [selectedRobotId, realtimeStatus],
+  );
+
+  const sendCommand = useCallback(
+    async (commandCode: RobotCommandCode, commandParam: unknown) => {
+      if (!selectedRobotId) return;
+      const payload = buildCommandPayload(commandCode, commandParam);
+      await trackRobotTask(commandCode, () => sendRobotCommand(selectedRobotId, payload), '发送命令失败');
+    },
+    [selectedRobotId, trackRobotTask],
+  );
+
+  // 切换激活地图版本：支持指定 editionId，切换完成后自动加载新版本数据
+  const activateMap = useCallback(async (targetEditionId?: string) => {
+    const eid = targetEditionId ?? edition?.id;
+    if (!selectedRobotId || !eid) return;
+    setSwitchingEditionId(eid);
+    try {
+      const activated = await trackRobotTask('activate_map', () => activateMapApi(selectedRobotId, eid), '激活地图失败');
+      if (!activated) return;
+      // 切换成功后加载新版本的地图数据
+      if (targetEditionId && targetEditionId !== edition?.id) {
+        const editionResponse = await getMapEdition(targetEditionId);
+        const newEdition = editionResponse.data[0];
+        if (newEdition) {
+          const [navResponse, topoResponse, narrationResponse, chargingResponse] = await Promise.all([
+            listNavigationPaths(newEdition.id),
+            listTopologyPaths(newEdition.id),
+            listNarrationProcesses(newEdition.id),
+            getChargingPoints(newEdition.id),
+          ]);
+          setEdition(newEdition);
+          setNavPaths(navResponse.data.rows);
+          setTopoPaths(topoResponse.data.rows);
+          setNarrationProcesses(narrationResponse.data);
+          setDemoMode(
+            (current) =>
+              current ||
+              editionResponse.source === 'mock' ||
+              navResponse.source === 'mock' ||
+              topoResponse.source === 'mock' ||
+              narrationResponse.source === 'mock' ||
+              chargingResponse.source === 'mock',
+          );
+        }
+      }
+    } finally {
+      setSwitchingEditionId(undefined);
+    }
+  }, [selectedRobotId, edition?.id, trackRobotTask]);
+
+  const controlNarration = useCallback(
+    async (
+      command: NarrationCommand,
+      options: {
+        processId?: string;
+        processName?: string;
+        editionId?: string;
+        nodeId?: string;
+        nodeName?: string;
+      } = {},
+    ) => {
+      const processId = options.processId ?? selectedProcessId;
+      const targetEditionId = options.editionId ?? edition?.id;
+      if (!selectedRobotId || !targetEditionId || !processId) return;
+      const process = narrationProcesses.find((item) => item.id === processId);
+
+      try {
+        const response = await controlNarrationApi(selectedRobotId, {
+          editionId: targetEditionId,
+          processId,
+          processName: options.processName ?? process?.name,
+          command,
+          operationSource: 'web-example',
+          nodeId: options.nodeId,
+          nodeName: options.nodeName,
+        });
+        setDemoMode((current) => current || response.source === 'mock');
+        await refreshNarrationRuntime();
+        setNarrationRuntime((current) => current.length > 0 ? current : [response.data]);
+      } catch (error) {
+        console.error('讲解控制失败', error);
+      }
+    },
+    [selectedRobotId, edition?.id, selectedProcessId, narrationProcesses, refreshNarrationRuntime],
   );
 
   // 根据选中节点构造并下发导航指令
@@ -498,12 +690,21 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     latestRobotInfo,
     realtimeEvents,
     edition,
+    allMaps,
+    editionsMap,
+    switchingEditionId,
     navPaths,
     topoPaths,
+    narrationProcesses,
+    selectedProcessId,
+    setSelectedProcessId,
+    narrationRuntime,
     tasks,
     demoMode,
     loading,
     sendCommand,
+    controlNarration,
+    activateMap,
     subscribeRealtimeTopic,
     unsubscribeRealtimeTopic,
     setRealtimeTopicFps,

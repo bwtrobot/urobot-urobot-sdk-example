@@ -1,10 +1,13 @@
 import { apiRequest, type ApiRequestResult } from './httpClient';
 import {
   createMockTaskResult,
+  mockNarrationRuntime,
   mockRobots,
   mockRuntime,
 } from '../mock/mockData';
 import type {
+  ControlNarrationParams,
+  NarrationRuntimeInfo,
   PageResult,
   RobotCommand,
   RobotRuntime,
@@ -128,6 +131,51 @@ export async function sendRobotCommand(robotId: string, payload: RobotCommand) {
     url: `/robot/command/${robotId}`,
     data: payload,
     fallbackData: taskId,
+  });
+}
+
+export async function controlNarration(robotId: string, params: ControlNarrationParams) {
+  requireText(params.editionId, 'editionId');
+  requireText(params.processId, 'processId');
+  requireText(params.command, 'command');
+
+  return apiRequest<NarrationRuntimeInfo>({
+    method: 'POST',
+    url: `/robot/${robotId}/narration/control`,
+    data: params,
+    fallbackData: {
+      ...mockNarrationRuntime[0],
+      ...params,
+      accepted: true,
+      mode: 'mock',
+      status: params.command === 'stop' ? 'stopped' : params.command,
+      currentNodeId: params.nodeId ?? mockNarrationRuntime[0]?.currentNodeId,
+      currentNodeName: params.nodeName ?? mockNarrationRuntime[0]?.currentNodeName,
+      updateTime: new Date().toISOString(),
+    },
+  });
+}
+
+function requireText(value: string | undefined, fieldName: string) {
+  if (!value || value.trim().length === 0) {
+    throw new Error(`${fieldName} 不能为空`);
+  }
+}
+
+export async function getNarrationRuntime(robotId: string) {
+  return apiRequest<NarrationRuntimeInfo[]>({
+    method: 'GET',
+    url: `/robot/${robotId}/narration/runtime`,
+    fallbackData: mockNarrationRuntime,
+  });
+}
+
+export async function activateMap(robotId: string, editionId: string) {
+  return apiRequest<string>({
+    method: 'POST',
+    url: `/robot/${robotId}/activate-map`,
+    data: { editionId },
+    fallbackData: createStandardUuid(),
   });
 }
 

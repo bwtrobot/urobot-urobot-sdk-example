@@ -91,6 +91,12 @@ export interface MapBimInfo {
   orientation: QuaternionValue;
 }
 
+export interface MapItem {
+  id: string;
+  name: string;
+  createTime?: string;
+}
+
 export interface MapEdition {
   id: string;
   mapId: string;
@@ -155,6 +161,87 @@ export interface NavigationPath {
   editionName?: string;
   coordinateFrame?: 'ROBOT' | 'THREE';
   nodes: PathNode[];
+}
+
+export type NarrationCommand = 'start' | 'pause' | 'resume' | 'stop' | 'node-pick';
+
+export interface ControlNarrationParams {
+  editionId: string;
+  processId: string;
+  processName?: string;
+  command: NarrationCommand;
+  operationSource?: string;
+  nodeId?: string;
+  nodeName?: string;
+}
+
+export interface NarrationProcessNodeSummary {
+  id: string;
+  uuid?: string;
+  name: string;
+  navNodeId?: string;
+  order?: number;
+  position?: Partial<Vector3Value> | Record<string, unknown>;
+  rotation?: Partial<QuaternionValue> | Record<string, unknown>;
+}
+
+export interface NarrationProcessSummary {
+  id: string;
+  uuid?: string;
+  name: string;
+  navPathId?: string;
+  navPathName?: string;
+  valid?: boolean;
+  nodes: NarrationProcessNodeSummary[];
+}
+
+export interface NarrationRuntimeNode {
+  nodeIndex?: number;
+  nodeId?: string;
+  nodeName?: string;
+  status?: string;
+  entranceScriptId?: string;
+  entranceScriptName?: string;
+  selfScriptId?: string;
+  selfScriptName?: string;
+  exitScriptId?: string;
+  exitScriptName?: string;
+}
+
+export interface NarrationRuntimeSegment {
+  nodeIndex?: number;
+  nodeId?: string;
+  nodeName?: string;
+  segmentType?: string;
+  fromNodeId?: string;
+  toNodeId?: string;
+  taskId?: string;
+  taskStatus?: string;
+}
+
+export interface NarrationRuntimeInfo {
+  accepted?: boolean;
+  mode?: string;
+  robotId?: string;
+  editionId?: string;
+  processId?: string;
+  processName?: string;
+  command?: NarrationCommand;
+  status?: string;
+  operationSource?: string;
+  compatibilityMode?: string;
+  currentNodeIndex?: number;
+  currentNodeId?: string;
+  currentNodeName?: string;
+  groupTaskId?: string;
+  taskIds?: string[];
+  skippedNodeIds?: string[];
+  latestTaskId?: string;
+  latestTaskStatus?: string;
+  nodes?: NarrationRuntimeNode[];
+  segments?: NarrationRuntimeSegment[];
+  message?: string;
+  updateTime?: string;
 }
 
 export interface RobotCommand {

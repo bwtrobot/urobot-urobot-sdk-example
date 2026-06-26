@@ -1,7 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { CameraStreamPanel } from '../../features/robot-execution/components/CameraStreamPanel';
 import { CommandPanel } from '../../features/robot-execution/components/CommandPanel';
+import { MapSwitchPanel } from '../../features/robot-execution/components/MapSwitchPanel';
 import { MotionPad, type MoveDirection } from '../../features/robot-execution/components/MotionPad';
+import { NarrationPanel } from '../../features/robot-execution/components/NarrationPanel';
 import { NavigationTargetPanel } from '../../features/robot-execution/components/NavigationTargetPanel';
 import { RealtimePushSummary } from '../../features/robot-execution/components/RealtimePushSummary';
 import { RealtimeTopicControls } from '../../features/robot-execution/components/RealtimeTopicControls';
@@ -181,6 +183,21 @@ export function SpatialWorkbenchPage() {
             selectedNodeIds={workbench.selectedNodeIds}
             onSelectedNodeIdsChange={workbench.setSelectedNodeIds}
             onNavigate={() => workbench.navigateToSelected()}
+          />
+          <MapSwitchPanel
+            maps={workbench.allMaps}
+            editionsMap={workbench.editionsMap}
+            currentEditionId={workbench.edition?.id}
+            switchingEditionId={workbench.switchingEditionId}
+            onSwitch={(editionId) => void workbench.activateMap(editionId)}
+          />
+          <NarrationPanel
+            editionId={workbench.edition?.id}
+            processes={workbench.narrationProcesses}
+            selectedProcessId={workbench.selectedProcessId}
+            onProcessSelect={workbench.setSelectedProcessId}
+            runtime={workbench.narrationRuntime}
+            onControl={(command, options) => void workbench.controlNarration(command, options)}
           />
           <CommandPanel
             robotName={workbench.selectedRobot?.name}
