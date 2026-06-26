@@ -57,7 +57,15 @@
 </li>
 <li><a href="#_mapclient">16. MapClient</a></li>
 <li><a href="#_性能建议">17. 性能建议</a></li>
-<li><a href="#_日志">18. 日志</a></li>
+<li><a href="#_日志">18. 日志</a>
+<ul class="sectlevel2">
+<li><a href="#_traceid">18.1. traceId</a></li>
+<li><a href="#_推荐字段">18.2. 推荐字段</a></li>
+<li><a href="#_日志级别">18.3. 日志级别</a></li>
+<li><a href="#_敏感字段">18.4. 敏感字段</a></li>
+<li><a href="#_机器人任务排查示例">18.5. 机器人任务排查示例</a></li>
+</ul>
+</li>
 <li><a href="#_错误码">19. 错误码</a></li>
 <li><a href="#_对象速查">20. 对象速查</a></li>
 <li><a href="#_指令速查">21. 指令速查</a></li>
@@ -726,24 +734,138 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
 <div class="paragraph">
 <p>SDK 使用 SLF4J API，不绑定具体日志实现。应用可使用 Logback、Log4j2 或其他 SLF4J 兼容实现。</p>
 </div>
+<div class="sect2">
+<h3 id="_traceid">18.1. traceId</h3>
 <div class="paragraph">
-<p>建议记录以下信息：</p>
+<p>SDK 会在需要记录内部日志时生成本地 <code>traceId</code>，格式为 <code>sdk-</code> 加 12 位随机十六进制字符。调用方也可以在发起业务调用前设置外部 traceId：</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">TraceContext.runWithTrace("order-20260624-001", () -&gt; {
+    robotClient.sendCommand(request);
+});</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>请求 Builder 也支持传入 <code>traceId</code>。当 Builder traceId 与当前线程上下文同时存在时，业务客户端优先使用 Builder 上的值。</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_推荐字段">18.2. 推荐字段</h3>
+<div class="paragraph">
+<p>SDK 内部日志使用 <code>key=value</code> 字段，便于 grep、Loki 或 ELK 检索。常见字段如下：</p>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p>Open API 返回的 <code>requestId</code>。</p>
+<p><code>traceId</code>：SDK 本地链路 ID。</p>
 </li>
 <li>
-<p><code>ServiceException.errorCode</code> 和 <code>errorMessage</code>。</p>
+<p><code>event</code>：日志事件名，如 <code>http_success</code>、<code>send_command</code>、<code>task_cache_updated</code>。</p>
 </li>
 <li>
-<p>业务侧任务 ID、机器人 ID、地图版本 ID 等关联标识。</p>
+<p><code>requestId</code>：服务端 HTTP 响应 ID。</p>
+</li>
+<li>
+<p><code>robotId</code>：机器人 ID。</p>
+</li>
+<li>
+<p><code>taskId</code>：机器人任务 ID。</p>
+</li>
+<li>
+<p><code>method</code>、<code>path</code>、<code>statusCode</code>、<code>durationMs</code>：HTTP 请求上下文。</p>
+</li>
+<li>
+<p><code>topic</code>：WebSocket Topic。</p>
+</li>
+<li>
+<p><code>disconnectReason</code>：WebSocket 断开原因，如 <code>NETWORK_ERROR</code>、<code>HEARTBEAT_TIMEOUT</code>、<code>KICKED</code>、<code>EXHAUSTED</code>。</p>
+</li>
+<li>
+<p><code>attempt</code>、<code>delayMs</code>、<code>errorType</code>：重试和异常上下文。</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_日志级别">18.3. 日志级别</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><code>INFO</code>：低频关键生命周期事件，如 WS 连接成功、重连成功、被挤占、重连耗尽、<code>sendCommand</code> 返回 taskId。</p>
+</li>
+<li>
+<p><code>DEBUG</code>：诊断事件，如 HTTP 请求开始和成功、Token 刷新、Topic 订阅、TaskCache 注册和更新。</p>
+</li>
+<li>
+<p><code>WARN</code>：可恢复异常，如网络断开、心跳超时、单次重连失败、用户回调异常。</p>
+</li>
+<li>
+<p><code>ERROR</code>：SDK 不会因为正常业务失败主动输出 error，调用方可在捕获异常后自行决定。</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_敏感字段">18.4. 敏感字段</h3>
+<div class="paragraph">
+<p>不要在应用日志中输出以下字段原始值：</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>Authorization</code></p>
+</li>
+<li>
+<p><code>accessToken</code></p>
+</li>
+<li>
+<p><code>refreshToken</code></p>
+</li>
+<li>
+<p><code>wsToken</code></p>
+</li>
+<li>
+<p><code>token</code></p>
+</li>
+<li>
+<p><code>SecretKey</code> / <code>secretKey</code></p>
+</li>
+<li>
+<p><code>sign</code></p>
+</li>
+<li>
+<p><code>nonce</code></p>
+</li>
+<li>
+<p>完整敏感 URL query</p>
 </li>
 </ul>
 </div>
 <div class="paragraph">
-<p>不要在日志中输出 SecretKey、Token 或完整签名参数。</p>
+<p>SDK 自身日志会对上述精确字段名做脱敏，<code>tokenExpireTime</code> 这类非敏感字段不会因为包含 <code>token</code> 子串被误脱敏。</p>
+</div>
+<div class="paragraph">
+<p>注意：Tyrus 框架自身在 <code>FINE</code> / <code>FINER</code> 等细粒度级别可能输出完整连接 URI。生产环境不要开启 Tyrus 的细粒度日志，避免框架层输出包含 <code>wsToken</code> 的原始 URI。</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_机器人任务排查示例">18.5. 机器人任务排查示例</h3>
+<div class="paragraph">
+<p>一次机器人任务可能跨越 HTTP、WebSocket 和本地缓存。建议按同一个 <code>traceId</code> 串联排查：</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">event=send_command traceId=sdk-a1b2c3d4e5f6 robotId=R001 taskId=T001
+event=http_success traceId=sdk-a1b2c3d4e5f6 method=POST path=/api/open/v1/robot/command/R001 requestId=...
+event=task_cache_registered traceId=sdk-a1b2c3d4e5f6 taskId=T001 taskStatus=PENDING
+event=task_cache_updated traceId=sdk-a1b2c3d4e5f6 taskId=T001 taskStatus=FINISHED payloadLength=128
+event=get_task_result_batch traceId=sdk-a1b2c3d4e5f6 robotId=R001 batchNo=1 from=0 to=1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>如果没有收到 WS <code>TASK_REPLY</code>，可用同一个 <code>traceId</code> 查看补偿查询 <code>getTaskResult</code> 的 HTTP <code>requestId</code>，再结合服务端日志定位。</p>
+</div>
 </div>
 </div>
 </div>
