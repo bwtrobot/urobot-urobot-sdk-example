@@ -152,6 +152,65 @@ describe('useRobotWorkbench', () => {
         command: 'start',
         operationSource: 'web-example',
       }),
+      'collapsed',
     );
+  });
+
+  it('切换讲解片段视图后立即刷新运行时', async () => {
+    const { getNarrationRuntime } = await import('../../../services/api/robotApi');
+
+    const { result } = renderHook(() => useRobotWorkbench());
+
+    await waitFor(() => {
+      expect(result.current.selectedRobotId).toBe(mockRobots[0].id);
+    });
+
+    vi.mocked(getNarrationRuntime).mockClear();
+
+    await act(async () => {
+      result.current.setSegmentMode('expanded');
+    });
+
+    await waitFor(() => {
+      expect(getNarrationRuntime).toHaveBeenCalledWith(mockRobots[0].id, 'expanded');
+    });
+    expect(result.current.segmentMode).toBe('expanded');
+  });
+
+  it('忽略切换视图前返回的过期运行时响应', async () => {
+    const { getNarrationRuntime } = await import('../../../services/api/robotApi');
+    let resolveCollapsed: ((value: { data: Array<{ processId: string; status: string }>; source: 'real' }) => void) | undefined;
+
+    vi.mocked(getNarrationRuntime)
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveCollapsed = resolve;
+      }))
+      .mockResolvedValueOnce({
+        data: [{ processId: 'narration-main-route', status: 'expanded-runtime' }],
+        source: 'real',
+      });
+
+    const { result } = renderHook(() => useRobotWorkbench());
+
+    await waitFor(() => {
+      expect(getNarrationRuntime).toHaveBeenCalledWith(mockRobots[0].id, 'collapsed');
+    });
+
+    await act(async () => {
+      result.current.setSegmentMode('expanded');
+    });
+
+    await waitFor(() => {
+      expect(result.current.narrationRuntime[0]?.status).toBe('expanded-runtime');
+    });
+
+    await act(async () => {
+      resolveCollapsed?.({
+        data: [{ processId: 'narration-main-route', status: 'stale-collapsed-runtime' }],
+        source: 'real',
+      });
+    });
+
+    expect(result.current.narrationRuntime[0]?.status).toBe('expanded-runtime');
   });
 });

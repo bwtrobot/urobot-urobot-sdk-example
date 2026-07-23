@@ -1,7 +1,7 @@
 import { apiRequest, type ApiRequestResult } from './httpClient';
 import {
+  createMockNarrationRuntime,
   createMockTaskResult,
-  mockNarrationRuntime,
   mockRobots,
   mockRuntime,
 } from '../mock/mockData';
@@ -12,6 +12,7 @@ import type {
   RobotCommand,
   RobotRuntime,
   RobotSummary,
+  SegmentMode,
   TaskResult,
 } from '../../shared/types/api';
 
@@ -134,23 +135,36 @@ export async function sendRobotCommand(robotId: string, payload: RobotCommand) {
   });
 }
 
-export async function controlNarration(robotId: string, params: ControlNarrationParams) {
+function buildSegmentModeParams(segmentMode?: SegmentMode) {
+  if (!segmentMode) return undefined;
+  const query = new URLSearchParams();
+  query.set('segmentMode', segmentMode);
+  return query;
+}
+
+export async function controlNarration(
+  robotId: string,
+  params: ControlNarrationParams,
+  segmentMode?: SegmentMode,
+) {
   requireText(params.editionId, 'editionId');
   requireText(params.processId, 'processId');
   requireText(params.command, 'command');
+  const fallbackRuntime = createMockNarrationRuntime(segmentMode);
 
   return apiRequest<NarrationRuntimeInfo>({
     method: 'POST',
     url: `/robot/${robotId}/narration/control`,
+    params: buildSegmentModeParams(segmentMode),
     data: params,
     fallbackData: {
-      ...mockNarrationRuntime[0],
+      ...fallbackRuntime[0],
       ...params,
       accepted: true,
       mode: 'mock',
       status: params.command === 'stop' ? 'stopped' : params.command,
-      currentNodeId: params.nodeId ?? mockNarrationRuntime[0]?.currentNodeId,
-      currentNodeName: params.nodeName ?? mockNarrationRuntime[0]?.currentNodeName,
+      currentNodeId: params.nodeId ?? fallbackRuntime[0]?.currentNodeId,
+      currentNodeName: params.nodeName ?? fallbackRuntime[0]?.currentNodeName,
       updateTime: new Date().toISOString(),
     },
   });
@@ -162,11 +176,12 @@ function requireText(value: string | undefined, fieldName: string) {
   }
 }
 
-export async function getNarrationRuntime(robotId: string) {
+export async function getNarrationRuntime(robotId: string, segmentMode?: SegmentMode) {
   return apiRequest<NarrationRuntimeInfo[]>({
     method: 'GET',
     url: `/robot/${robotId}/narration/runtime`,
-    fallbackData: mockNarrationRuntime,
+    params: buildSegmentModeParams(segmentMode),
+    fallbackData: createMockNarrationRuntime(segmentMode),
   });
 }
 

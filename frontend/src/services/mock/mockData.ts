@@ -8,6 +8,7 @@ import type {
   PathNode,
   RobotRuntime,
   RobotSummary,
+  SegmentMode,
   TaskResult,
   TopologyPath,
 } from '../../shared/types/api';
@@ -253,12 +254,22 @@ export const mockNarrationProcesses: NarrationProcessSummary[] = [
       order: node.order,
       position: node.position,
       rotation: node.orientation,
+      selfScripts: node.id === 'node-inspection'
+        ? ['script-welcome', 'script-device', 'script-safety']
+        : [`script-${node.id}`],
+      selfScriptNames: node.id === 'node-inspection'
+        ? ['欢迎词', '设备介绍', '安全须知']
+        : [`${node.name}讲解`],
+      selfScriptValids: node.id === 'node-inspection'
+        ? [true, true, false]
+        : [true],
+      stopover: node.id !== 'node-dock',
     })),
   },
 ];
 
-export const mockNarrationRuntime: NarrationRuntimeInfo[] = [
-  {
+function createBaseNarrationRuntime(): NarrationRuntimeInfo {
+  return {
     robotId: 'robot-alpha',
     editionId: 'edition-main-v1',
     processId: 'narration-main-route',
@@ -266,17 +277,52 @@ export const mockNarrationRuntime: NarrationRuntimeInfo[] = [
     command: 'start',
     status: 'idle',
     operationSource: 'web-example',
-    currentNodeIndex: 0,
-    currentNodeId: 'node-start',
-    currentNodeName: '起点',
+    currentNodeIndex: 1,
+    currentNodeId: 'node-inspection',
+    currentNodeName: '巡检点',
     nodes: [
       { nodeIndex: 0, nodeId: 'node-start', nodeName: '起点', status: 'pending' },
-      { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', status: 'pending' },
+      { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', status: 'executing' },
       { nodeIndex: 2, nodeId: 'node-dock', nodeName: '充电桩', status: 'pending' },
     ],
     updateTime: new Date().toISOString(),
-  },
-];
+  };
+}
+
+export function createMockNarrationRuntime(segmentMode: SegmentMode = 'collapsed'): NarrationRuntimeInfo[] {
+  const runtime = createBaseNarrationRuntime();
+  if (segmentMode === 'expanded') {
+    return [{
+      ...runtime,
+      taskIds: ['task-entrance', 'task-self-0', 'task-self-1', 'task-self-2', 'task-transition', 'task-exit'],
+      latestTaskId: 'task-self-1',
+      latestTaskStatus: 'executing',
+      segments: [
+        { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'entrance', selfIndex: null, taskId: 'task-entrance', taskStatus: 'finished' },
+        { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'self', selfIndex: 0, taskId: 'task-self-0', taskStatus: 'finished' },
+        { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'self', selfIndex: 1, taskId: 'task-self-1', taskStatus: 'executing' },
+        { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'self', selfIndex: 2, taskId: 'task-self-2', taskStatus: 'pending' },
+        { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'transition', selfIndex: null, fromNodeId: 'node-inspection', toNodeId: 'node-dock', taskId: 'task-transition', taskStatus: 'pending' },
+        { nodeIndex: 2, nodeId: 'node-dock', nodeName: '充电桩', segmentType: 'exit', selfIndex: null, taskId: 'task-exit', taskStatus: 'pending' },
+      ],
+    }];
+  }
+
+  return [{
+    ...runtime,
+    taskIds: ['task-entrance', 'task-self-all', 'task-transition', 'task-exit'],
+    latestTaskId: 'task-self-all',
+    latestTaskStatus: 'executing',
+    segments: [
+      { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'entrance', selfIndex: null, taskId: 'task-entrance', taskStatus: 'finished' },
+      { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'self', selfIndex: null, taskId: 'task-self-all', taskStatus: 'executing' },
+      { nodeIndex: 1, nodeId: 'node-inspection', nodeName: '巡检点', segmentType: 'transition', selfIndex: null, fromNodeId: 'node-inspection', toNodeId: 'node-dock', taskId: 'task-transition', taskStatus: 'pending' },
+      { nodeIndex: 2, nodeId: 'node-dock', nodeName: '充电桩', segmentType: 'exit', selfIndex: null, taskId: 'task-exit', taskStatus: 'pending' },
+    ],
+  }];
+}
+
+export const mockNarrationRuntime: NarrationRuntimeInfo[] = createMockNarrationRuntime('collapsed');
 
 export function createMockTaskResult(taskId: string): TaskResult {
   return {

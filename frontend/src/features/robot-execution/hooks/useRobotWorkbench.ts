@@ -37,6 +37,7 @@ import type {
   RealtimeTopicSubscription,
   RobotRuntime,
   RobotSummary,
+  SegmentMode,
   TaskResult,
   TopologyPath,
 } from '../../../shared/types/api';
@@ -98,6 +99,9 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
   const [narrationProcesses, setNarrationProcesses] = useState<NarrationProcessSummary[]>([]);
   const [selectedProcessId, setSelectedProcessId] = useState('');
   const [narrationRuntime, setNarrationRuntime] = useState<NarrationRuntimeInfo[]>([]);
+  const [segmentMode, setSegmentMode] = useState<SegmentMode>('collapsed');
+  const segmentModeRef = useRef<SegmentMode>('collapsed');
+  const narrationRuntimeRequestSeqRef = useRef(0);
   const [tasks, setTasks] = useState<WorkbenchTask[]>([]);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeConnectionStatus>('DISCONNECTED');
   const [subscribedTopics, setSubscribedTopics] = useState<Set<string>>(new Set());
@@ -128,6 +132,10 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
   useEffect(() => {
     realtimeTopicHandlerRef.current = options.onRealtimeTopicMessage;
   }, [options.onRealtimeTopicMessage]);
+
+  useEffect(() => {
+    segmentModeRef.current = segmentMode;
+  }, [segmentMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -437,16 +445,33 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     pollingAbortRef.current = null;
   }, [selectedRobotId]);
 
-  const refreshNarrationRuntime = useCallback(async (isCancelled?: () => boolean) => {
+  const refreshNarrationRuntime = useCallback(async (
+    isCancelled?: () => boolean,
+    requestSegmentMode: SegmentMode = segmentMode,
+  ) => {
+    const requestSeq = narrationRuntimeRequestSeqRef.current + 1;
+    narrationRuntimeRequestSeqRef.current = requestSeq;
     if (!selectedRobotId) {
       setNarrationRuntime([]);
       return;
     }
-    const response = await getNarrationRuntime(selectedRobotId);
-    if (isCancelled?.()) return;
+    const response = await getNarrationRuntime(selectedRobotId, requestSegmentMode);
+    if (
+      isCancelled?.() ||
+      requestSeq !== narrationRuntimeRequestSeqRef.current ||
+      requestSegmentMode !== segmentModeRef.current
+    ) {
+      return;
+    }
     setNarrationRuntime(response.data);
     setDemoMode((current) => current || response.source === 'mock');
-  }, [selectedRobotId]);
+  }, [selectedRobotId, segmentMode]);
+
+  const handleSegmentModeChange = useCallback((nextSegmentMode: SegmentMode) => {
+    narrationRuntimeRequestSeqRef.current += 1;
+    setNarrationRuntime([]);
+    setSegmentMode(nextSegmentMode);
+  }, []);
 
   useEffect(() => {
     if (!selectedRobotId) {
@@ -614,6 +639,7 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
       const targetEditionId = options.editionId ?? edition?.id;
       if (!selectedRobotId || !targetEditionId || !processId) return;
       const process = narrationProcesses.find((item) => item.id === processId);
+      const requestSegmentMode = segmentMode;
 
       try {
         const response = await controlNarrationApi(selectedRobotId, {
@@ -624,15 +650,17 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
           operationSource: 'web-example',
           nodeId: options.nodeId,
           nodeName: options.nodeName,
-        });
+        }, requestSegmentMode);
         setDemoMode((current) => current || response.source === 'mock');
-        await refreshNarrationRuntime();
-        setNarrationRuntime((current) => current.length > 0 ? current : [response.data]);
+        await refreshNarrationRuntime(undefined, requestSegmentMode);
+        if (requestSegmentMode === segmentModeRef.current) {
+          setNarrationRuntime((current) => current.length > 0 ? current : [response.data]);
+        }
       } catch (error) {
         console.error('讲解控制失败', error);
       }
     },
-    [selectedRobotId, edition?.id, selectedProcessId, narrationProcesses, refreshNarrationRuntime],
+    [selectedRobotId, edition?.id, selectedProcessId, narrationProcesses, refreshNarrationRuntime, segmentMode],
   );
 
   // 根据选中节点构造并下发导航指令
@@ -699,6 +727,8 @@ export function useRobotWorkbench(options: UseRobotWorkbenchOptions = {}) {
     selectedProcessId,
     setSelectedProcessId,
     narrationRuntime,
+    segmentMode,
+    setSegmentMode: handleSegmentModeChange,
     tasks,
     demoMode,
     loading,

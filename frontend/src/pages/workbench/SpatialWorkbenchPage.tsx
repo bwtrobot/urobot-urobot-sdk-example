@@ -197,6 +197,8 @@ export function SpatialWorkbenchPage() {
             selectedProcessId={workbench.selectedProcessId}
             onProcessSelect={workbench.setSelectedProcessId}
             runtime={workbench.narrationRuntime}
+            segmentMode={workbench.segmentMode}
+            onSegmentModeChange={workbench.setSegmentMode}
             onControl={(command, options) => void workbench.controlNarration(command, options)}
           />
           <CommandPanel

@@ -164,6 +164,7 @@ export interface NavigationPath {
 }
 
 export type NarrationCommand = 'start' | 'pause' | 'resume' | 'stop' | 'node-pick';
+export type SegmentMode = 'collapsed' | 'expanded';
 
 export interface ControlNarrationParams {
   editionId: string;
@@ -183,6 +184,10 @@ export interface NarrationProcessNodeSummary {
   order?: number;
   position?: Partial<Vector3Value> | Record<string, unknown>;
   rotation?: Partial<QuaternionValue> | Record<string, unknown>;
+  selfScripts?: string[];
+  selfScriptNames?: string[];
+  selfScriptValids?: boolean[];
+  stopover?: boolean;
 }
 
 export interface NarrationProcessSummary {
@@ -213,6 +218,7 @@ export interface NarrationRuntimeSegment {
   nodeId?: string;
   nodeName?: string;
   segmentType?: string;
+  selfIndex?: number | null;
   fromNodeId?: string;
   toNodeId?: string;
   taskId?: string;

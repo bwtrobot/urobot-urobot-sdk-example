@@ -256,6 +256,11 @@ public class MapService {
         m.put("order", node.order());
         m.put("position", node.position());
         m.put("rotation", node.rotation());
+        // SDK 对 selfScripts、selfScriptNames、selfScriptValids 三个列表各自独立降级，不保证等长。
+        m.put("selfScripts", node.selfScripts());
+        m.put("selfScriptNames", node.selfScriptNames());
+        m.put("selfScriptValids", node.selfScriptValids());
+        m.put("stopover", node.stopover());
         return m;
     }
 }

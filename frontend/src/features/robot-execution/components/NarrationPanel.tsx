@@ -1,10 +1,13 @@
-import { Pause, Play, RefreshCw, Square, StepForward } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pause, Play, RefreshCw, Square, StepForward } from 'lucide-react';
+import { useState } from 'react';
 import type {
   NarrationCommand,
   NarrationProcessNodeSummary,
   NarrationProcessSummary,
   NarrationRuntimeInfo,
+  SegmentMode,
 } from '../../../shared/types/api';
+import { buildNarrationNodeBehaviors, getNarrationNodeStatus } from './narrationPanelUtils';
 import './robot-execution.css';
 
 interface NarrationPanelProps {
@@ -13,6 +16,8 @@ interface NarrationPanelProps {
   selectedProcessId: string;
   onProcessSelect: (processId: string) => void;
   runtime: NarrationRuntimeInfo[];
+  segmentMode: SegmentMode;
+  onSegmentModeChange: (segmentMode: SegmentMode) => void;
   onControl: (
     command: NarrationCommand,
     options?: {
@@ -31,8 +36,11 @@ export function NarrationPanel({
   selectedProcessId,
   onProcessSelect,
   runtime,
+  segmentMode,
+  onSegmentModeChange,
   onControl,
 }: NarrationPanelProps) {
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
   const selectedProcess = processes.find((process) => process.id === selectedProcessId);
   const currentRuntime = runtime.find((item) => item.processId === selectedProcessId) ?? runtime[0];
   const runtimeNodeStatus = new Map(
@@ -48,6 +56,18 @@ export function NarrationPanel({
       processName: selectedProcess.name,
       nodeId: node?.id,
       nodeName: node?.name,
+    });
+  }
+
+  function toggleNode(nodeId: string) {
+    setExpandedNodeIds((current) => {
+      const next = new Set(current);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
     });
   }
 
@@ -72,6 +92,23 @@ export function NarrationPanel({
               ))}
             </select>
           </label>
+
+          <div className="narration-view-toggle" role="group" aria-label="讲解片段视图">
+            <button
+              type="button"
+              className={segmentMode === 'collapsed' ? 'active' : undefined}
+              onClick={() => onSegmentModeChange('collapsed')}
+            >
+              折叠
+            </button>
+            <button
+              type="button"
+              className={segmentMode === 'expanded' ? 'active' : undefined}
+              onClick={() => onSegmentModeChange('expanded')}
+            >
+              展开
+            </button>
+          </div>
 
           <div className="narration-runtime">
             <span>{currentRuntime?.status ?? '未开始'}</span>
@@ -100,21 +137,53 @@ export function NarrationPanel({
           <ul className="narration-node-list">
             {(selectedProcess?.nodes ?? []).map((node) => {
               const active = currentRuntime?.currentNodeId === node.id || currentRuntime?.currentNodeId === node.navNodeId;
-              const status = runtimeNodeStatus.get(node.id) ?? runtimeNodeStatus.get(node.navNodeId ?? '');
+              const segmentStatus = getNarrationNodeStatus(node.id, currentRuntime?.segments);
+              const status = segmentMode === 'collapsed'
+                ? segmentStatus ?? runtimeNodeStatus.get(node.id) ?? runtimeNodeStatus.get(node.navNodeId ?? '')
+                : undefined;
+              const behaviors = buildNarrationNodeBehaviors(node, currentRuntime?.segments, segmentMode);
+              const stopoverLabel = node.stopover === false ? '不停留' : '停留';
+              const expanded = expandedNodeIds.has(node.id);
               return (
                 <li key={node.id}>
-                  <button
-                    type="button"
-                    disabled={!canControl}
-                    className={active ? 'active' : undefined}
-                    onClick={() => send('node-pick', node)}
-                  >
-                    <span className="node-name">{node.name}</span>
-                    <span className="narration-node-meta">
-                      {status || (active ? '当前' : `#${node.order ?? '-'}`)}
-                    </span>
-                    <StepForward size={14} />
-                  </button>
+                  <div className="narration-node-row">
+                    <button
+                      type="button"
+                      className="narration-node-toggle"
+                      disabled={behaviors.length === 0}
+                      onClick={() => toggleNode(node.id)}
+                      title={expanded ? '收起行为' : '展开行为'}
+                    >
+                      {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canControl}
+                      className={`narration-node-action${active ? ' active' : ''}`}
+                      onClick={() => send('node-pick', node)}
+                    >
+                      <span className="node-name">{node.name}</span>
+                      <span className="narration-node-meta">
+                        <span>{stopoverLabel}</span>
+                        <span>{status || (active ? '当前' : `#${node.order ?? '-'}`)}</span>
+                      </span>
+                      <StepForward size={14} />
+                    </button>
+                  </div>
+                  {expanded && behaviors.length > 0 && (
+                    <ol className="narration-behavior-list">
+                      {behaviors.map((behavior) => (
+                        <li key={`${node.id}-${behavior.index}`} className={behavior.valid ? undefined : 'invalid'}>
+                          <span className="narration-behavior-index">{behavior.index + 1}</span>
+                          <span className="narration-behavior-name">{behavior.name}</span>
+                          {!behavior.valid && <span className="narration-behavior-invalid">无效</span>}
+                          {segmentMode === 'expanded' && (
+                            <span className="narration-behavior-status">{behavior.status ?? '-'}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
                 </li>
               );
             })}

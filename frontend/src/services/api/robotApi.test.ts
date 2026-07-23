@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   activateMap,
   buildCommandPayload,
+  getNarrationRuntime,
   getRobotRuntime,
   getTaskResults,
   listRobots,
@@ -279,6 +280,54 @@ describe('robotApi', () => {
     expect(result.data).toMatchObject({
       accepted: true,
       editionId: 'edition-main-v1',
+    });
+  });
+
+  it('requests narration runtime with segmentMode in query params only when provided', async () => {
+    http.defaults.adapter = vi.fn(async (config) => ({
+      data: { result: [] },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })) as AxiosAdapter;
+
+    await getNarrationRuntime('robot-alpha', 'expanded');
+
+    let sentConfig = vi.mocked(http.defaults.adapter).mock.calls[0][0];
+    expect(sentConfig.url).toBe('/robot/robot-alpha/narration/runtime');
+    expect(sentConfig.params.toString()).toBe('segmentMode=expanded');
+
+    await getNarrationRuntime('robot-alpha');
+
+    sentConfig = vi.mocked(http.defaults.adapter).mock.calls[1][0];
+    expect(sentConfig.url).toBe('/robot/robot-alpha/narration/runtime');
+    expect(sentConfig.params?.toString?.() ?? '').toBe('');
+  });
+
+  it('sends narration control segmentMode in query params and not in request body', async () => {
+    http.defaults.adapter = vi.fn(async (config) => ({
+      data: { result: { accepted: true } },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })) as AxiosAdapter;
+
+    const { controlNarration } = await import('./robotApi');
+    await controlNarration('robot-alpha', {
+      editionId: 'edition-main-v1',
+      processId: 'process-1',
+      command: 'start',
+    }, 'expanded');
+
+    const sentConfig = vi.mocked(http.defaults.adapter).mock.calls[0][0];
+    expect(sentConfig.url).toBe('/robot/robot-alpha/narration/control');
+    expect(sentConfig.params.toString()).toBe('segmentMode=expanded');
+    expect(JSON.parse(String(sentConfig.data))).toEqual({
+      editionId: 'edition-main-v1',
+      processId: 'process-1',
+      command: 'start',
     });
   });
 

@@ -112,30 +112,15 @@ public class RobotService {
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    public Mono<Map<String, Object>> controlNarration(String robotId, ControlNarrationBody body) {
+    public Mono<Map<String, Object>> controlNarration(String robotId, ControlNarrationBody body, String segmentMode) {
         return Mono.fromSupplier(() -> {
-            validateControlNarrationBody(body);
-            // 将前端选择的流程和节点上下文原样交给 SDK，由 SDK 负责实际讲解控制协议。
-            ControlNarrationRequest request = ControlNarrationRequest.builder()
-                    .robotId(robotId)
-                    .editionId(body.getEditionId())
-                    .processId(body.getProcessId())
-                    .processName(body.getProcessName())
-                    .command(body.getCommand())
-                    .operationSource(body.getOperationSource())
-                    .nodeId(body.getNodeId())
-                    .nodeName(body.getNodeName())
-                    .build();
-            return controlNarrationToMap(uRobotClient.robot().controlNarration(request));
+            return controlNarrationToMap(uRobotClient.robot().controlNarration(buildControlNarrationRequest(robotId, body, segmentMode)));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    public Mono<List<Map<String, Object>>> getNarrationRuntime(String robotId) {
+    public Mono<List<Map<String, Object>>> getNarrationRuntime(String robotId, String segmentMode) {
         return Mono.fromSupplier(() -> {
-            GetNarrationRuntimeRequest request = GetNarrationRuntimeRequest.builder()
-                    .robotId(robotId)
-                    .build();
-            List<NarrationRuntime> runtimes = uRobotClient.robot().getNarrationRuntime(request).runtimes();
+            List<NarrationRuntime> runtimes = uRobotClient.robot().getNarrationRuntime(buildGetNarrationRuntimeRequest(robotId, segmentMode)).runtimes();
             if (runtimes == null) {
                 return Collections.<Map<String, Object>>emptyList();
             }
@@ -252,6 +237,49 @@ public class RobotService {
         }
     }
 
+    SegmentMode parseSegmentMode(String segmentMode) {
+        if (segmentMode == null || segmentMode.trim().isEmpty()) {
+            return null;
+        }
+        String normalized = segmentMode.trim();
+        if ("collapsed".equalsIgnoreCase(normalized)) {
+            return SegmentMode.COLLAPSED;
+        }
+        if ("expanded".equalsIgnoreCase(normalized)) {
+            return SegmentMode.EXPANDED;
+        }
+        throw new IllegalArgumentException("segmentMode 仅支持 collapsed 或 expanded");
+    }
+
+    GetNarrationRuntimeRequest buildGetNarrationRuntimeRequest(String robotId, String segmentMode) {
+        SegmentMode parsedSegmentMode = parseSegmentMode(segmentMode);
+        GetNarrationRuntimeRequest.Builder builder = GetNarrationRuntimeRequest.builder()
+                .robotId(robotId);
+        if (parsedSegmentMode != null) {
+            builder.segmentMode(parsedSegmentMode);
+        }
+        return builder.build();
+    }
+
+    ControlNarrationRequest buildControlNarrationRequest(String robotId, ControlNarrationBody body, String segmentMode) {
+        validateControlNarrationBody(body);
+        SegmentMode parsedSegmentMode = parseSegmentMode(segmentMode);
+        // 将前端选择的流程和节点上下文原样交给 SDK，由 SDK 负责实际讲解控制协议。
+        ControlNarrationRequest.Builder builder = ControlNarrationRequest.builder()
+                .robotId(robotId)
+                .editionId(body.getEditionId())
+                .processId(body.getProcessId())
+                .processName(body.getProcessName())
+                .command(body.getCommand())
+                .operationSource(body.getOperationSource())
+                .nodeId(body.getNodeId())
+                .nodeName(body.getNodeName());
+        if (parsedSegmentMode != null) {
+            builder.segmentMode(parsedSegmentMode);
+        }
+        return builder.build();
+    }
+
     private List<Map<String, Object>> narrationNodesToList(List<NarrationNode> nodes) {
         return nodes == null ? Collections.emptyList() : nodes.stream().map(this::narrationNodeToMap).collect(Collectors.toList());
     }
@@ -275,12 +303,15 @@ public class RobotService {
         return map;
     }
 
-    private Map<String, Object> narrationSegmentToMap(NarrationSegment segment) {
+    Map<String, Object> narrationSegmentToMap(NarrationSegment segment) {
         Map<String, Object> map = new LinkedHashMap<>();
+        // segments 属于手写映射分支，SDK 后续新增字段时需在这里同步跟进。
         map.put("nodeIndex", segment.nodeIndex());
         map.put("nodeId", segment.nodeId());
         map.put("nodeName", segment.nodeName());
+        // segmentType 实际取值为小写 entrance / self / transition / exit。
         map.put("segmentType", segment.segmentType());
+        map.put("selfIndex", segment.selfIndex());
         map.put("fromNodeId", segment.fromNodeId());
         map.put("toNodeId", segment.toNodeId());
         map.put("taskId", segment.taskId());

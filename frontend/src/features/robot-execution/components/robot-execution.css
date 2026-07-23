@@ -527,46 +527,146 @@
   white-space: nowrap;
 }
 
+.narration-view-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 6px;
+  background: #eef2f7;
+}
+
+.narration-view-toggle button {
+  min-height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.narration-view-toggle button.active {
+  background: #fff;
+  color: #0369a1;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 10%);
+}
+
 .narration-node-list {
   display: grid;
   gap: 6px;
-  max-height: 180px;
+  max-height: 240px;
   margin: 0;
   padding: 0;
   overflow-y: auto;
   list-style: none;
 }
 
-.narration-node-list button {
+.narration-node-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 4px;
+}
+
+.narration-node-toggle,
+.narration-node-action {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.narration-node-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.narration-node-action {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto 16px;
   align-items: center;
   gap: 6px;
   width: 100%;
   min-height: 34px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
   padding: 6px 8px;
-  background: #fff;
-  color: #334155;
-  cursor: pointer;
 }
 
-.narration-node-list button:hover,
-.narration-node-list button.active {
+.narration-node-toggle:hover,
+.narration-node-action:hover,
+.narration-node-action.active {
   border-color: #0ea5e9;
   background: #f0f9ff;
 }
 
-.narration-node-list button:disabled {
+.narration-node-toggle:disabled,
+.narration-node-action:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
 .narration-node-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: #64748b;
   font-size: 11px;
   white-space: nowrap;
+}
+
+.narration-behavior-list {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0 12px;
+  padding: 0 0 0 10px;
+  border-left: 1px solid #e2e8f0;
+  list-style: none;
+}
+
+.narration-behavior-list li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.narration-behavior-list li.invalid {
+  color: #94a3b8;
+}
+
+.narration-behavior-index {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+}
+
+.narration-behavior-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.narration-behavior-invalid,
+.narration-behavior-status {
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.narration-behavior-invalid {
+  color: #dc2626;
 }
 
 /* 地图切换表格 — 限制高度并启用滚动 */

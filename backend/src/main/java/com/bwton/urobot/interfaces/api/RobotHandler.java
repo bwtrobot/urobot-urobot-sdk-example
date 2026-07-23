@@ -64,13 +64,16 @@ public class RobotHandler {
     @PostMapping("{robotId}/narration/control")
     public Mono<Result<Map<String, Object>>> controlNarration(
             @PathVariable String robotId,
-            @RequestBody ControlNarrationBody body) {
-        return service.controlNarration(robotId, body).map(Result::ok);
+            @RequestBody ControlNarrationBody body,
+            @RequestParam(required = false) String segmentMode) {
+        return service.controlNarration(robotId, body, segmentMode).map(Result::ok);
     }
 
     @GetMapping("{robotId}/narration/runtime")
-    public Mono<Result<List<Map<String, Object>>>> narrationRuntime(@PathVariable String robotId) {
-        return service.getNarrationRuntime(robotId).map(Result::ok);
+    public Mono<Result<List<Map<String, Object>>>> narrationRuntime(
+            @PathVariable String robotId,
+            @RequestParam(required = false) String segmentMode) {
+        return service.getNarrationRuntime(robotId, segmentMode).map(Result::ok);
     }
 
     @GetMapping("{robotId}/maps")
