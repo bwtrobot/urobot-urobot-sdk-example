@@ -41,6 +41,7 @@ vite.config.d.ts
 
 ### Codex / Superpowers ###
 .superpowers/
+.worktrees/
 
 ### VS Code ###
 .vscode/
