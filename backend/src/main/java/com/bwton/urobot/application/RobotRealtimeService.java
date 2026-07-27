@@ -10,12 +10,15 @@ import io.github.bwtrobot.opensdk.ws.model.Topics;
 import io.github.bwtrobot.opensdk.ws.realtime.RobotRealtimeClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,10 +28,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class RobotRealtimeService {
+    private static final Logger log = LoggerFactory.getLogger(RobotRealtimeService.class);
     private static final Duration LAST_SESSION_CLOSE_DELAY = Duration.ofSeconds(5);
+    private static final String SDK_REALTIME_CLIENTS_FIELD = "realtimeClients";
+    private static final String SDK_CLIENT_CLOSED_FIELD = "closed";
     private final URobotClient uRobotClient;
     private final ObjectMapper objectMapper;
     private final ConcurrentMap<String, RealtimeRobotSession> sessions = new ConcurrentHashMap<>();
@@ -75,8 +82,8 @@ public class RobotRealtimeService {
         broadcastText(session, statusEvent(robotId, session.status, null));
 
         return Mono.fromRunnable(() -> {
-            RobotRealtimeClient client = uRobotClient.robot().realtime(robotId);
-            session.client = client;
+            RobotRealtimeClient client = realtimeClient(robotId);
+            assignClient(session, client);
             registerCallbacks(session, client);
             client.connect();
             subscribe(robotId, Collections.singletonList(Topics.ROBOT_UPLOAD_INFO), false, 0L).block();
@@ -94,8 +101,10 @@ public class RobotRealtimeService {
         if (topics == null || topics.isEmpty()) return Mono.empty();
 
         return Mono.fromRunnable(() -> {
-            RobotRealtimeClient client = session.client != null ? session.client : uRobotClient.robot().realtime(robotId);
-            session.client = client;
+            RobotRealtimeClient client = session.client != null && !isRealtimeClientClosed(session.client)
+                    ? session.client
+                    : realtimeClient(robotId);
+            assignClient(session, client);
             registerCallbacks(session, client);
 
             for (String topic : topics) {
@@ -128,6 +137,7 @@ public class RobotRealtimeService {
         return Mono.fromRunnable(() -> {
             if (session.client != null) {
                 session.client.close();
+                evictCachedRealtimeClient(robotId, session.client);
             }
             session.client = null;
             // 回调随旧 client 一并失效，必须复位标志，否则下次 connect 时 registerCallbacks 会提前 return，新 client 收不到任何回调。
@@ -160,25 +170,76 @@ public class RobotRealtimeService {
         return sessions.computeIfAbsent(robotId, RealtimeRobotSession::new);
     }
 
+    RobotRealtimeClient realtimeClient(String robotId) {
+        RobotRealtimeClient client = uRobotClient.robot().realtime(robotId);
+        if (!isRealtimeClientClosed(client)) {
+            return client;
+        }
+
+        // SDK 按 robotId 缓存 RobotRealtimeClient，但 close 后实例不可复用；连接前清理 closed 缓存，避免复用后注册回调时报错。
+        evictCachedRealtimeClient(robotId, client);
+        return uRobotClient.robot().realtime(robotId);
+    }
+
+    private void assignClient(RealtimeRobotSession session, RobotRealtimeClient client) {
+        if (session.client == client) {
+            return;
+        }
+        session.client = client;
+        session.callbacksRegistered = false;
+    }
+
     private void registerCallbacks(RealtimeRobotSession session, RobotRealtimeClient client) {
         if (session.callbacksRegistered) return;
-        session.callbacksRegistered = true;
 
-        client.onConnected(() -> {
-            session.status = RealtimeConnectionStatus.CONNECTED;
-            broadcastText(session, statusEvent(session.robotId, session.status, null));
-        });
-        client.onDisconnected(reason -> {
-            session.status = reason == DisconnectReason.NETWORK_ERROR || reason == DisconnectReason.HEARTBEAT_TIMEOUT
-                    ? RealtimeConnectionStatus.RECONNECTING
-                    : RealtimeConnectionStatus.DISCONNECTED;
-            broadcastText(session, statusEvent(session.robotId, session.status, reason.name()));
-        });
-        client.onKicked(() -> {
-            session.status = RealtimeConnectionStatus.KICKED;
-            broadcastText(session, statusEvent(session.robotId, session.status, "kicked by another client"));
-        });
-        client.onTaskResult(data -> handleTaskResult(session, data));
+        try {
+            client.onConnected(() -> {
+                session.status = RealtimeConnectionStatus.CONNECTED;
+                broadcastText(session, statusEvent(session.robotId, session.status, null));
+            });
+            client.onDisconnected(reason -> {
+                session.status = reason == DisconnectReason.NETWORK_ERROR || reason == DisconnectReason.HEARTBEAT_TIMEOUT
+                        ? RealtimeConnectionStatus.RECONNECTING
+                        : RealtimeConnectionStatus.DISCONNECTED;
+                broadcastText(session, statusEvent(session.robotId, session.status, reason.name()));
+            });
+            client.onKicked(() -> {
+                session.status = RealtimeConnectionStatus.KICKED;
+                broadcastText(session, statusEvent(session.robotId, session.status, "kicked by another client"));
+            });
+            client.onTaskResult(data -> handleTaskResult(session, data));
+            session.callbacksRegistered = true;
+        } catch (RuntimeException error) {
+            session.callbacksRegistered = false;
+            throw error;
+        }
+    }
+
+    private boolean isRealtimeClientClosed(RobotRealtimeClient client) {
+        try {
+            Field field = RobotRealtimeClient.class.getDeclaredField(SDK_CLIENT_CLOSED_FIELD);
+            field.setAccessible(true);
+            Object value = field.get(client);
+            return value instanceof AtomicBoolean && ((AtomicBoolean) value).get();
+        } catch (ReflectiveOperationException error) {
+            log.warn("读取 SDK 实时连接关闭状态失败，将按可复用处理: client={}", client, error);
+            return false;
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void evictCachedRealtimeClient(String robotId, RobotRealtimeClient client) {
+        try {
+            Object robotClient = uRobotClient.robot();
+            Field field = robotClient.getClass().getDeclaredField(SDK_REALTIME_CLIENTS_FIELD);
+            field.setAccessible(true);
+            Object value = field.get(robotClient);
+            if (value instanceof ConcurrentMap) {
+                ((ConcurrentMap) value).remove(robotId, client);
+            }
+        } catch (ReflectiveOperationException error) {
+            log.warn("清理 SDK 实时连接缓存失败: robotId={}", robotId, error);
+        }
     }
 
     private void handleTopic(RealtimeRobotSession session, TopicData data) {

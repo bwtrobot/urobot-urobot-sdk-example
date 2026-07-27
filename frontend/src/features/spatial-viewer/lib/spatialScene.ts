@@ -24,6 +24,7 @@ import {
   threeQuaternionToRos,
 } from '../../../shared/utils/pose';
 import type { LayerVisibility } from '../components/LayerDropdown';
+import { createRobotFocusViewpoint } from './spatialCamera';
 import { PointCloud2Parser, applyRobotToThree, type PointCloud2Message } from './pointCloud2Parser';
 
 export interface RenderSettings {
@@ -98,7 +99,10 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
   private readonly robot = new THREE.Group();
   private realtimePointCloud: THREE.Points | null = null;
   // 当前已加载的机型标识，避免重复加载
-  private loadedTerminalType: number | null = null;
+  private loadedRobotModelKey: string | null = null;
+  private latestRuntime: RobotRuntime | null = null;
+  private hasFocusedRobot = false;
+  private robotModelPending = false;
 
   mount(container: HTMLDivElement) {
     this.dispose();
@@ -154,6 +158,12 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
   }
 
   updateRobotRuntime(runtime: RobotRuntime | null) {
+    this.latestRuntime = runtime;
+    this.applyRobotRuntimePose(runtime);
+    this.focusRobotOnce();
+  }
+
+  private applyRobotRuntimePose(runtime: RobotRuntime | null) {
     const pose = runtime?.ros_odom?.pose;
     this.robot.visible = Boolean(pose);
     if (!pose) return;
@@ -164,6 +174,7 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
 
     const threeQuat = rosQuaternionToThree(pose.orientation);
     this.robot.quaternion.copy(threeQuat);
+    this.ssp?.render();
   }
 
   /** @deprecated 由 setActivePathData 替代，仅保留向后兼容 */
@@ -270,6 +281,10 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
       this.ssp = null;
     }
     this.cpsPlugin = null;
+    this.loadedRobotModelKey = null;
+    this.latestRuntime = null;
+    this.hasFocusedRobot = false;
+    this.robotModelPending = false;
   }
 
   // ── BIM 加载 ──
@@ -342,37 +357,50 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
   }
 
   /**
-   * 根据机器人的 terminal_type_value 判定机型并加载对应 URDF 模型
+   * 根据机器人的 terminal_type_value / terminal_type 判定机型并加载对应 URDF 模型
    * CANINE（四足）类型 → b2_description（机器狗）
    * HUMAN（人形）类型 → g1_description（23 自由度人形）
    * 其他/未知 → 保留默认简易 Mesh
    */
   loadRobotModel(robot: RobotSummary | null) {
-    const terminalValue = robot?.terminalTypeValue ?? robot?.terminal_type_value;
+    const robotModelType = this.resolveRobotModelType(robot);
+    const robotModelKey = robotModelType?.key ?? null;
     // 同一机型不重复加载
-    if (terminalValue === this.loadedTerminalType) return;
-    this.loadedTerminalType = terminalValue ?? null;
+    if (robotModelKey === this.loadedRobotModelKey) {
+      this.focusRobotOnce();
+      return;
+    }
+    this.loadedRobotModelKey = robotModelKey;
+    this.hasFocusedRobot = false;
 
     // 无法识别机型时使用默认 Mesh
-    if (terminalValue == null) {
+    if (!robotModelType) {
+      this.robotModelPending = false;
       this.buildFallbackRobotMesh();
+      this.applyRobotRuntimePose(this.latestRuntime);
+      this.focusRobotOnce();
       return;
     }
 
     // 判定机型分类：CANINE 前缀 = 四足，HUMAN 前缀 = 人形
-    const urdfConfig = this.resolveUrdfConfig(terminalValue);
+    const urdfConfig = this.resolveUrdfConfig(robotModelType);
     if (!urdfConfig) {
+      this.robotModelPending = false;
       this.buildFallbackRobotMesh();
+      this.applyRobotRuntimePose(this.latestRuntime);
+      this.focusRobotOnce();
       return;
     }
 
     // 异步加载 URDF 模型
+    this.robotModelPending = true;
     const loader = new URDFLoader();
     loader.loadMeshCb = this.createUrdfMeshLoader();
     loader.packages = () => urdfConfig.packagePath;
     loader.loadAsync(urdfConfig.urdfUrl).then((urdfRobot) => {
       // 确保加载完成时机型未切换
-      if (this.loadedTerminalType !== terminalValue) return;
+      if (this.loadedRobotModelKey !== robotModelKey) return;
+      this.robotModelPending = false;
       this.clearGroup(this.robot);
       // URDF 坐标系为 Z-up（ROS），Three.js/SoonSpace 为 Y-up，需绕 X 轴旋转 -90°
       urdfRobot.rotation.x = -Math.PI / 2;
@@ -387,41 +415,71 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
         }
       });
       this.robot.add(urdfRobot);
-      this.robot.visible = false;
+      // URDF 是异步加载的，runtime 可能已经先到；加载完成后必须重新应用最新位姿，避免模型被隐藏在原点。
+      this.applyRobotRuntimePose(this.latestRuntime);
+      this.focusRobotOnce();
       this.ssp?.render();
     }).catch((err) => {
       console.warn('[URDF] 加载失败，使用默认模型', err);
-      if (this.loadedTerminalType === terminalValue) {
+      if (this.loadedRobotModelKey === robotModelKey) {
+        this.robotModelPending = false;
         this.buildFallbackRobotMesh();
+        this.applyRobotRuntimePose(this.latestRuntime);
+        this.focusRobotOnce();
       }
     });
   }
 
   /**
-   * 根据 terminal_type_value 解析 URDF 文件路径
+   * 根据机器人类型解析 URDF 文件路径
    * 值定义参考后端 TerminalTypeEnums
    */
-  private resolveUrdfConfig(terminalValue: number): { packagePath: string; urdfUrl: string } | null {
+  private resolveUrdfConfig(robotModelType: { category: 'human' | 'canine'; value?: number }): { packagePath: string; urdfUrl: string } | null {
     // HUMAN 人形: 1=G1-23, 4=G1-29, 7=H2, 8=PM01
-    const humanTypes = new Set([1, 4, 7, 8]);
     // CANINE 四足: 0=Go2, 2=B2, 3=X30, 5=B2-W, 6=Go2-W, 9=A2, 10=Q25, 11=A2-W
-    const canineTypes = new Set([0, 2, 3, 5, 6, 9, 10, 11]);
-
-    if (humanTypes.has(terminalValue)) {
+    if (robotModelType.category === 'human') {
       // 人形统一使用 g1_23dof URDF（项目中可用的人形模型）
-      const urdfFile = terminalValue === 4 ? 'g1_29dof.urdf' : 'g1_23dof.urdf';
+      const urdfFile = robotModelType.value === 4 ? 'g1_29dof.urdf' : 'g1_23dof.urdf';
       return {
         packagePath: '/urdf/g1_description/',
         urdfUrl: `/urdf/g1_description/${urdfFile}`,
       };
     }
-    if (canineTypes.has(terminalValue)) {
+    if (robotModelType.category === 'canine') {
       // 四足统一使用 b2_description URDF（项目中可用的四足模型）
       return {
         packagePath: '/urdf/b2_description',
         urdfUrl: '/urdf/b2_description/b2_description.urdf',
       };
     }
+    return null;
+  }
+
+  private resolveRobotModelType(robot: RobotSummary | null): { key: string; category: 'human' | 'canine'; value?: number } | null {
+    const terminalValue = robot?.terminalTypeValue ?? robot?.terminal_type_value;
+    const humanTypes = new Set([1, 4, 7, 8]);
+    const canineTypes = new Set([0, 2, 3, 5, 6, 9, 10, 11]);
+
+    if (terminalValue != null) {
+      if (humanTypes.has(terminalValue)) return { key: `human-${terminalValue}`, category: 'human', value: terminalValue };
+      if (canineTypes.has(terminalValue)) return { key: `canine-${terminalValue}`, category: 'canine', value: terminalValue };
+    }
+
+    const typeText = [
+      robot?.terminalType,
+      robot?.terminal_type,
+      robot?.deviceTypeDesc,
+      robot?.device_type_desc,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    // 兼容平台只返回字符串描述的场景，避免缺失 terminal_type_value 时无法加载 URDF。
+    if (/(human|humanoid|人形|g1|h2|pm01)/i.test(typeText)) {
+      return { key: `human-${typeText}`, category: 'human' };
+    }
+    if (/(canine|quadruped|四足|机器狗|go2|b2|x30|a2|q25)/i.test(typeText)) {
+      return { key: `canine-${typeText}`, category: 'canine' };
+    }
+
     return null;
   }
 
@@ -440,6 +498,30 @@ class SoonSpaceSceneAdapter implements SpatialSceneAdapter {
         console.warn(`[URDF] 不支持的 mesh 格式: ${path}`);
       }
     };
+  }
+
+  private focusRobotOnce() {
+    if (!this.ssp || this.robotModelPending || this.hasFocusedRobot || !this.robot.visible) return;
+
+    const box = new THREE.Box3().setFromObject(this.robot);
+    const center = box.isEmpty()
+      ? this.robot.position.clone()
+      : box.getCenter(new THREE.Vector3());
+    const sphere = box.isEmpty()
+      ? new THREE.Sphere(center, 1)
+      : box.getBoundingSphere(new THREE.Sphere());
+    const viewpoint = createRobotFocusViewpoint(center, sphere.radius);
+
+    this.hasFocusedRobot = true;
+    void this.ssp.controls.setLookAt(
+      viewpoint.position.x,
+      viewpoint.position.y,
+      viewpoint.position.z,
+      viewpoint.target.x,
+      viewpoint.target.y,
+      viewpoint.target.z,
+      true,
+    ).then(() => this.ssp?.render());
   }
 
   // ── 路径渲染 ──
