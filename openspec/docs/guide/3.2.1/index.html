@@ -55,12 +55,7 @@
 </li>
 </ul>
 </li>
-<li><a href="#_mapclient">16. MapClient</a>
-<ul class="sectlevel2">
-<li><a href="#_讲解流程的多节点行为">16.1. 讲解流程的多节点行为</a></li>
-<li><a href="#_展开读取讲解运行时片段">16.2. 展开读取讲解运行时片段</a></li>
-</ul>
-</li>
+<li><a href="#_mapclient">16. MapClient</a></li>
 <li><a href="#_性能建议">17. 性能建议</a></li>
 <li><a href="#_日志">18. 日志</a>
 <ul class="sectlevel2">
@@ -705,95 +700,6 @@ GetNavPathAllPathByEditionResponse paths = client.map().navPath()
     .getAllPathByEdition(GetNavPathAllPathByEditionRequest.builder()
         .editionId("edition-id")
         .build());</code></pre>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_讲解流程的多节点行为">16.1. 讲解流程的多节点行为</h3>
-<div class="paragraph">
-<p>讲解流程节点可以配置多个自身行为。请使用 <code>selfScripts()</code>、<code>selfScriptNames()</code> 和 <code>selfScriptValids()</code> 读取完整列表；单值访问器仅用于兼容旧代码。<code>stopover()</code> 表示执行完该节点后是否停留，旧服务端未返回此字段时返回 <code>true</code>。</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">ListNarrationProcessesResponse response = client.map().narration().listProcesses(
-    ListNarrationProcessesRequest.builder()
-        .editionId("edition-id")
-        .build());
-
-for (NarrationProcess process : response.data()) {
-    for (NarrationProcessNode node : process.nodes()) {
-        List&lt;String&gt; selfScripts = node.selfScripts();
-        List&lt;String&gt; selfScriptNames = node.selfScriptNames();
-        List&lt;Boolean&gt; selfScriptValids = node.selfScriptValids();
-        boolean stopover = node.stopover();
-    }
-}</code></pre>
-</div>
-</div>
-</div>
-<div class="sect2">
-<h3 id="_展开读取讲解运行时片段">16.2. 展开读取讲解运行时片段</h3>
-<div class="paragraph">
-<p>不设置 <code>segmentMode</code> 时，服务端保持原有的折叠形态。需要逐个跟踪节点行为时，在查询或控制请求的 builder 中设置 <code>SegmentMode.EXPANDED</code>。</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">GetNarrationRuntimeResponse runtimeResponse = client.robot().getNarrationRuntime(
-    GetNarrationRuntimeRequest.builder()
-        .robotId("robot-id")
-        .segmentMode(SegmentMode.EXPANDED)
-        .build());
-
-ControlNarrationResponse controlResponse = client.robot().controlNarration(
-    ControlNarrationRequest.builder()
-        .robotId("robot-id")
-        .editionId("edition-id")
-        .processId("process-id")
-        .command("start")
-        .segmentMode(SegmentMode.EXPANDED)
-        .build());</code></pre>
-</div>
-</div>
-<div class="paragraph">
-<p><code>EXPANDED</code> 形态下，SELF 片段的 <code>selfIndex()</code> 是该节点 <code>selfScripts()</code> 的从 0 开始下标。非 SELF 片段、折叠形态或旧服务端响应可能返回 <code>null</code>，使用前必须同时检查 null 和列表范围。以下代码承接本节上面的 <code>response</code> 和 <code>runtimeResponse</code>：</p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">Map&lt;String, NarrationProcess&gt; processesById = new HashMap&lt;&gt;();
-for (NarrationProcess process : response.data()) {
-    processesById.putIfAbsent(process.id(), process);
-}
-
-for (NarrationRuntime runtime : runtimeResponse.runtimes()) {
-    NarrationProcess process = processesById.get(runtime.processId());
-    if (process == null) {
-        continue;
-    }
-
-    // 只在当前运行时所属的讲解流程内建立节点映射，避免不同流程复用导航点时互相覆盖。
-    Map&lt;String, NarrationProcessNode&gt; nodesByRuntimeNodeId = new HashMap&lt;&gt;();
-    for (NarrationProcessNode node : process.nodes()) {
-        String runtimeNodeId = node.navNodeId();
-        if (runtimeNodeId == null || runtimeNodeId.trim().isEmpty()) {
-            runtimeNodeId = node.id();
-        }
-        if (runtimeNodeId != null) {
-            nodesByRuntimeNodeId.putIfAbsent(runtimeNodeId, node);
-        }
-    }
-
-    for (NarrationSegment segment : runtime.segments()) {
-        if (!"self".equals(segment.segmentType())) {
-            continue;
-        }
-        NarrationProcessNode node = nodesByRuntimeNodeId.get(segment.nodeId());
-        Integer selfIndex = segment.selfIndex();
-        if (node != null &amp;&amp; selfIndex != null
-                &amp;&amp; selfIndex &gt;= 0 &amp;&amp; selfIndex &lt; node.selfScripts().size()) {
-            String selfScriptId = node.selfScripts().get(selfIndex);
-        }
-    }
-}</code></pre>
-</div>
 </div>
 </div>
 </div>
@@ -1574,7 +1480,7 @@ realtime.onTopic(Topics.CURRENT_POINTCLOUD, data -&gt; {
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2026-07-07 09:20:00 +0800
+Last updated 2026-06-16 13:55:56 +0800
 </div>
 </div>
 <script src="assets/highlight.js/highlight.min.js"></script>
